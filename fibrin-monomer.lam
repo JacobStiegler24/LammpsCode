@@ -1,0 +1,118 @@
+############################################################################################
+# Variables
+# sigma = 22.25 nm
+# epsilon = 2.53E-22 J
+# 1 lj force unit = 11.25 pN
+# 1 lj spring constant = 0.5 micro N/m
+variable K_r equal 4.5
+variable K_r_prime equal 2.7
+variable R0 equal 1
+variable R0_prime equal 1
+variable K_theta equal 100.0 
+# variable stretch_force equal 10.0
+variable unfold_critical_distance equal 1.8
+variable fold_critical_distance equal 0.5
+variable reaction_upperbound equal 40
+
+variable run_no equal 50000
+variable time_step equal 0.002   # time step in picoseconds
+# variable seed equal 54654652     # random number seed
+variable dumpfreq equal 5
+#########################################################################################
+
+units lj                # Lennard-Jones units
+atom_style angle        # atoms with bonds and angles
+
+boundary p p p          # all boundaries are periodic
+
+neighbor 1.9 bin
+neigh_modify every 1 delay 1 check yes
+
+read_data initial_configuration.txt
+
+labelmap atom 1 D 2 E
+labelmap bond 1 fold 2 unfold
+
+#labelmap atom 1 D 2 E
+group reaction_group id 1
+group extension_group id 3  
+group motion_group id 2 3
+group rxn-group type D E
+
+pair_style lj/cut 10.0
+pair_coeff * * 0.0 0.0
+
+bond_style harmonic         # harmonic bond
+bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
+bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
+
+angle_style harmonic             # harmonic bond angular component
+angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
+
+#exclude atom 1
+fix 1 motion_group nve                           # NVE integrator    
+fix 2 motion_group langevin 1.0 1.0 1.0 ${seed}  # Langevin thermostat
+
+# variable fz equal ramp(0,${stretch_force})
+# fix extension_force extension_group addforce 0.0 0.0 v_fz
+fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
+
+############################################################################################
+# chatgpt, explain the terms
+#fix keepcenter all recenter INIT INIT INIT
+############################################################################################
+
+timestep ${time_step}                        # time step in picoseconds
+
+############################################################################################
+# Print to file commands  
+shell mkdir ${outdir}
+
+dump force_dump extension_group custom ${dumpfreq} ${outdir}/force.dump fz
+
+compute bondlen all bond/local dist
+compute btype all property/local btype
+dump bondlen_dump all local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
+
+compute myAngle all angle/local theta
+dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
+shell mv angles.dump output
+
+dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
+write_data datafile.data
+############################################################################################
+
+############################################################################################
+# Molecule change for unfolding/folding
+
+molecule folded m_folded.txt
+molecule unfolded m_unfolded.txt
+molecule D1E2D m_D1E2D.txt
+molecule D2E1D m_D2E1D.txt
+
+# test without unfolding for angular bond
+fix rxn1 all bond/react & 
+  react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
+  react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
+  react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapDE.txt prob 0.5 ${seed} &
+  react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapED.txt prob 0.5 ${seed} &
+  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.1 ${seed} &
+  react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.1 ${seed} &
+  react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.1 ${seed} &
+  react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.1 ${seed}
+  # react rxn-fold rxn-group 1 ${unfold_critical_distance} ${reaction_upperbound} folded unfolded map.txt prob 0.5 ${seed} &
+  # react rxn-unfold rxn-group 1 0 ${fold_critical_distance} unfolded folded map.txt prob 0.1 ${seed}
+############################################################################################
+
+run ${run_no}  
+
+# unfix extension_force
+
+# run ${run_no}  # run again to allow the system to relax after the reactions
+
+write_restart final.restart
+
+# statistics
+# file structure
+# angular potential
+# folding/unfolding efficiency
