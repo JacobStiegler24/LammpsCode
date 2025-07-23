@@ -5,18 +5,18 @@
 # 1 lj force unit = 11.25 pN
 # 1 lj spring constant = 0.5 micro N/m
 variable K_r equal 18.40865
-variable K_r_prime equal 30
+variable K_r_prime equal 10
 variable R0 equal 1
 variable R0_prime equal 1
-variable K_theta equal 100.0 
+variable K_theta equal 30.0 
 # variable stretch_force equal 10.0
 variable unfold_critical_distance equal 1.8
-variable fold_critical_distance equal 0.5
-variable reaction_upperbound equal 40
+variable fold_critical_distance equal 1
+variable reaction_upperbound equal 50
 variable temp equal 0.1840865
 
 variable run_no equal 50000
-variable time_step equal 0.002   # time step in picoseconds
+variable time_step equal 0.0001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 5
 #########################################################################################
@@ -95,14 +95,21 @@ molecule D2E1D m_D2E1D.txt
 fix rxn1 all bond/react & 
   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
-  react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapDE.txt prob 0.5 ${seed} &
-  react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapED.txt prob 0.5 ${seed} &
-  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.1 ${seed} &
-  react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.1 ${seed} &
-  react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.1 ${seed} &
-  react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.1 ${seed}
-  # react rxn-fold rxn-group 1 ${unfold_critical_distance} ${reaction_upperbound} folded unfolded map.txt prob 0.5 ${seed} &
-  # react rxn-unfold rxn-group 1 0 ${fold_critical_distance} unfolded folded map.txt prob 0.1 ${seed}
+  react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} &
+  react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #&
+  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} &
+  react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} &
+  react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} &
+  react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+
+
+# molecule fold m_fold.txt
+# molecule unfold m_unfold.txt
+
+# # fix rxn2 all bond/react &
+#   react rxn-unfold all 1 ${unfold_critical_distance} ${reaction_upperbound} fold unfold map.txt prob 0.5 ${seed} &
+#   react rxn-fold all 1 0 ${fold_critical_distance} unfold fold map.txt prob 0.1 ${seed}
+
 ############################################################################################
 
 run ${run_no}  
