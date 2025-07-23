@@ -13,7 +13,7 @@ print('imported')
 # Free energy + standard error
 
 # Constants
-timestep = 0.002 # lj
+timestep = 0.0001 # lj
 nevery = 5 # how often data is dumped
 indextime = timestep * nevery # time between each data point in picoseconds
 
@@ -26,7 +26,8 @@ tau = sigma*np.sqrt(mass/epsilon)
 
 def readfile():
     # Change directory to the project folder
-    os.chdir(r'\\wsl.localhost\Ubuntu\home\jacob\projects\Fibrin-Monomer\output')
+    path = os.path.join(os.getcwd(), r'output')
+    os.chdir(path)
     print(os.getcwd())
 
     folder_lst = sorted(os.listdir())
@@ -88,7 +89,7 @@ def compute(btype_arr, blen_arr):
     # Mean time one/two unfolded + std/se
     # Free energy + standard error
 
-    mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])*sigma
+    mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
 
     timestep_no = len(btype_arr[1])
 
@@ -115,43 +116,66 @@ def compute(btype_arr, blen_arr):
     FU = False
     UU = False
     for i in range(timestep_no):
-        if btype_arr[0][i] == 2:
-            if btype_arr[1][i] == 2 and FU:
-                    FU = False
-                    UU = True
-                    FU_time_lst.append(counter)
-                    counter = 0
-            elif btype_arr[1][i] == 1 and not FU:
+        if btype_arr[0][i] != btype_arr[1][i]:
+            if not FU and not UU:
                 FU = True
-                if UU:
-                    UU = False
-                    UU_time_lst.append(counter)
-                    counter = 0
-        if btype_arr[1][i] == 2:
-            if btype_arr[0][i] == 1 and not FU:
-                FU = True
-                if UU:
-                    UU = False
-                    UU_time_lst.append(counter)
                 counter = 0
+            elif UU:
+                FU = True
+                UU = False
+                UU_time_lst.append(counter)
+                counter = 0
+
+        elif btype_arr[0][i] == 2 and btype_arr[1][i] == 2:
+            if not FU and not UU:
+                UU = True
+                counter = 0
+            elif FU:
+                UU = True
+                FU = False
+                FU_time_lst.append(counter)
+                counter = 0
+
+        elif btype_arr[0][i] == 1 and btype_arr[1][i] == 1:
+            if FU:
+                FU = False
+                FU_time_lst.append(counter)
+                counter = 0
+            elif UU:
+                UU = False
+                UU_time_lst.append(counter)
+                counter = 0
+        
         if FU or UU:
             counter += 1
-        if i == timestep_no-1:
-            if FU:
-                FU_time_lst.append(counter)
-            elif UU:
-                UU_time_lst.append(counter)
+
+    if FU:
+        FU_time_lst.append(counter)
+    elif UU:
+        UU_time_lst.append(counter)
 
     FU_time_arr = np.array(FU_time_lst, dtype= float)
     UU_time_arr = np.array(UU_time_lst, dtype= float)
 
-    FU_mean_duration = np.mean(FU_time_arr*indextime*tau)
-    FU_mean_duration_std = np.std(FU_time_arr*indextime*tau)
-    FU_mean_duration_se = FU_mean_duration_std / np.sqrt(len(FU_time_lst))
+    # if no values in the list, sem will be zero. Set sem to timestep to avoid division by 
+    # zero, this should be physically meaningful.
+    if len(FU_time_arr) > 0:
+        FU_mean_duration = np.mean(FU_time_arr * indextime)
+        FU_mean_duration_std = np.std(FU_time_arr * indextime)
+        FU_mean_duration_se = FU_mean_duration_std / np.sqrt(len(FU_time_lst))
+    else:
+        FU_mean_duration = 0
+        FU_mean_duration_std = 0
+        FU_mean_duration_se = timestep
 
-    UU_mean_duration = np.mean(UU_time_arr*indextime*tau)
-    UU_mean_duration_std = np.std(UU_time_arr*indextime*tau)
-    UU_mean_duration_se = UU_mean_duration_std / np.sqrt(len(UU_time_lst))
+    if len(UU_time_arr) > 0:
+        UU_mean_duration = np.mean(UU_time_arr * indextime)
+        UU_mean_duration_std = np.std(UU_time_arr * indextime)
+        UU_mean_duration_se = UU_mean_duration_std / np.sqrt(len(UU_time_lst))
+    else:
+        UU_mean_duration = 0
+        UU_mean_duration_std = 0
+        UU_mean_duration_se = timestep
 
     ############################################################################################
     # Equilibrium constant and free energy calculations
@@ -168,13 +192,31 @@ def compute(btype_arr, blen_arr):
     return mean_extension, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, FU_mean_duration_se,\
         UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, K_eq_FU, K_eq_UU
 
-def weighted_avg_and_se(group, mean_col, se_col):
-    means = group[mean_col].values
-    ses = group[se_col].values
-    weights = 1 / ses**2
-    weighted_mean = np.sum(weights * means) / np.sum(weights)
+def weighted_avg_std_se(group, mean_col, se_col, std_col):
+    # weighted average and standard error of the mean
+    # pooled standard deviation. https://www.statisticshowto.com/pooled-standard-deviation
+
+    mean = group[mean_col].values
+    std = group[std_col].values
+    se = group[se_col].values
+
+    valid = (~np.isnan(mean)) & (~np.isnan(std)) & (se > 0) & (~np.isnan(se))
+    if np.any(~valid):
+        print(f"Valid mean/std/sem NaN or sem > 0 entries: {np.sum(valid)} out of {len(valid)}")
+
+    if np.sum(valid) == 0:
+        return pd.Series({'mean': np.nan, 'std': np.nan, 'sem': np.nan})
+    
+    mean = mean[valid]
+    std = std[valid]
+    se = se[valid]
+
+    weights = 1 / se**2
+    weighted_mean = np.sum(weights * mean) / np.sum(weights)
     weighted_se = np.sqrt(1 / np.sum(weights))
-    return pd.Series({'mean': weighted_mean, 'sem': weighted_se})
+    weighted_std = np.sqrt(np.sum((std**2)) / (len(std)))  # pooled standard deviation
+
+    return pd.Series({'mean': weighted_mean, 'std': weighted_std, 'sem': weighted_se})
 
 def computeSeedAveraged(data_df):
     # Equilibrium constant and free energy calculations
@@ -190,82 +232,53 @@ def computeSeedAveraged(data_df):
     # print(data_force_groups)
     
     analysis_df = data_force_groups.agg({
-        'mean extension': ['mean', 'sem'],
-        'FU fraction': ['mean', 'sem'],
-        'UU fraction': ['mean', 'sem'],
-        'FU equilibrium constant': ['mean', 'sem'],
-        'UU equilibrium constant': ['mean', 'sem']
+        'mean extension': ['mean', 'std', 'sem'],
+        'FU fraction': ['mean', 'std', 'sem'],
+        'UU fraction': ['mean', 'std', 'sem'],
+        'FU equilibrium constant': ['mean', 'std', 'sem'],
+        'UU equilibrium constant': ['mean', 'std', 'sem']
     })
-    
-    # print(analysis_df)
-    
+
     FU_duration = data_df.groupby('force').apply(
-    lambda g: weighted_avg_and_se(g, 'FU mean duration', 'FU mean duration se')
+        lambda group: weighted_avg_std_se(
+            group, 'FU mean duration', 'FU mean duration se', 'FU mean duration std'
+        )
     )
     UU_duration = data_df.groupby('force').apply(
-        lambda g: weighted_avg_and_se(g, 'UU mean duration', 'UU mean duration se')
+            lambda group: weighted_avg_std_se(
+                group, 'UU mean duration', 'UU mean duration se', 'UU mean duration std'
+        )
     )
 
     analysis_df[('FU mean duration', 'mean')] = FU_duration['mean']
+    analysis_df[('FU mean duration', 'std')]  = FU_duration['std']
     analysis_df[('FU mean duration', 'sem')]   = FU_duration['sem']
     analysis_df[('UU mean duration', 'mean')] = UU_duration['mean']
+    analysis_df[('UU mean duration', 'std')]  = UU_duration['std']
     analysis_df[('UU mean duration', 'sem')]   = UU_duration['sem']
 
-    # pull out the two columns
-    eqc = analysis_df[('FU equilibrium constant', 'mean')]
+    eq_const = analysis_df[('FU equilibrium constant', 'mean')]
     sem = analysis_df[('FU equilibrium constant', 'sem')]
 
-    # value: −ln(K), but only where K>0
-    fe_val = -np.log(eqc.where(eqc > 0, np.nan))
+    fe_val = np.where(eq_const > 0, -np.log(eq_const), np.inf)
+    fe_se = np.where(eq_const > 0, sem / eq_const, np.nan)
 
-    # se: sem(K)/K, but only where K>0
-    fe_se = (sem / eqc).where(eqc > 0, np.nan)
-
-    # assign back
     analysis_df[('FU free energy', 'value')] = fe_val
     analysis_df[('FU free energy', 'sem')]    = fe_se
-    
-     # pull out the two columns
-    eqc = analysis_df[('UU equilibrium constant', 'mean')]
+
+    eq_const = analysis_df[('UU equilibrium constant', 'mean')]
     sem = analysis_df[('UU equilibrium constant', 'sem')]
 
-    # value: −ln(K), but only where K>0
-    fe_val = -np.log(eqc.where(eqc > 0, np.nan))
+    fe_val = np.where(eq_const > 0, -np.log(eq_const), np.inf)
+    fe_se = np.where(eq_const > 0, sem / eq_const, np.nan)
 
-    # se: sem(K)/K, but only where K>0
-    fe_se = (sem / eqc).where(eqc > 0, np.nan)
-
-    # assign back
     analysis_df[('UU free energy', 'value')] = fe_val
     analysis_df[('UU free energy', 'sem')]    = fe_se
-
-    # analysis_df['FU free energy'] = analysis_df.agg(
-    #     value, std
-    # )
-    
-    # analysis_df[('FU equilibrium constant', 'mean')].apply(
-    #     lambda x: -np.log(x) if x > 0 else np.inf
-    # )
-    # analysis_df['FU free energy', 'se'] = analysis_df['FU equilibrium constant'].agg(sem)
-    # .apply(
-    #     lambda x: x['FU equilibrium constant', 'sem']/x['FU equilibrium constant', 'mean'] \
-    #     if x['FU equilibrium constant', 'mean'] > 0 else np.nan
-    # )
-    
-    # analysis_df['UU free energy', 'value'] = analysis_df['UU equilibrium constant', 'mean'].apply(
-    #     lambda x: -np.log(x) if x > 0 else np.inf
-    # )
-    # analysis_df['UU free energy', 'se'] = analysis_df.apply(
-    #     lambda x: x['UU equilibrium constant', 'sem']/x['UU equilibrium constant', 'mean'] \
-    #     if x['UU equilibrium constant', 'mean'] > 0 else np.nan
-    # )
 
     return analysis_df
 
 def main():
     data_df = readfile()
-    dupes = data_df.duplicated(subset=['force', 'seed'])
-    print(data_df[dupes])
     rows = []
     force_seed_pairs = data_df[['force', 'seed']].drop_duplicates().values
     for force, seed in force_seed_pairs:
@@ -275,30 +288,42 @@ def main():
         K_eq_FU, K_eq_UU \
         = compute(data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'types'].iloc[0], \
                 data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'lengths'].iloc[0])
-        
+
         row = {
-        "force": force,
+        "force": force * F,
         "seed": seed,
-        "mean extension": mean_extension,
+        "mean extension": mean_extension * sigma,
         "FU fraction": FU_fraction,
         "UU fraction": UU_fraction,
-        "FU mean duration": FU_mean_duration,
-        "FU mean duration std": FU_mean_duration_std,
-        "FU mean duration se": FU_mean_duration_se,
-        "UU mean duration": UU_mean_duration,
-        "UU mean duration std": UU_mean_duration_std,
-        "UU mean duration se": UU_mean_duration_se,
+        "FU mean duration": FU_mean_duration * tau,
+        "FU mean duration std": FU_mean_duration_std * tau,
+        "FU mean duration se": FU_mean_duration_se * tau,
+        "UU mean duration": UU_mean_duration * tau,
+        "UU mean duration std": UU_mean_duration_std * tau,
+        "UU mean duration se": UU_mean_duration_se * tau,
         "FU equilibrium constant": K_eq_FU,
         "UU equilibrium constant": K_eq_UU
         }
+        if (FU_fraction > 0 and FU_mean_duration == 0) or (UU_fraction > 0 and UU_mean_duration == 0):
+            print(f"[WARNING] Fraction > 0 but duration == 0 → Force: {force}, Seed: {seed}")
+            print(f"  FU fraction: {FU_fraction}, FU duration: {FU_mean_duration}")
+            print(f"  UU fraction: {UU_fraction}, UU duration: {UU_mean_duration}")
+        elif (FU_fraction > 0 and np.isnan(FU_mean_duration)) or (UU_fraction > 0 and np.isnan(UU_mean_duration)):
+            print(f"[WARNING] Fraction > 0 but duration == NaN → Force: {force}, Seed: {seed}")
+
         rows.append(row)
 
     monomer_df = pd.DataFrame(rows)
     monomer_df = computeSeedAveraged(monomer_df)
     monomer_df.sort_values(by='force')
-    os.chdir('..')
-    path = os.getcwd()
-    os.chdir(path, r'/output')
-    monomer_df.to_csv('data.csv')
 
+
+
+    os.chdir('..')
+    path = os.path.join(os.getcwd(), r'data files')
+    os.chdir(path)
+    print(os.getcwd())
+
+    monomer_df.to_csv('data.csv')
+    print(monomer_df)
 main()
