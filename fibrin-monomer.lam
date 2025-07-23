@@ -4,8 +4,8 @@
 # epsilon = 2.53E-22 J
 # 1 lj force unit = 11.25 pN
 # 1 lj spring constant = 0.5 micro N/m
-variable K_r equal 4.5
-variable K_r_prime equal 2.7
+variable K_r equal 18.40865
+variable K_r_prime equal 30
 variable R0 equal 1
 variable R0_prime equal 1
 variable K_theta equal 100.0 
@@ -13,6 +13,7 @@ variable K_theta equal 100.0
 variable unfold_critical_distance equal 1.8
 variable fold_critical_distance equal 0.5
 variable reaction_upperbound equal 40
+variable temp equal 0.1840865
 
 variable run_no equal 50000
 variable time_step equal 0.002   # time step in picoseconds
@@ -51,7 +52,7 @@ angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
 
 #exclude atom 1
 fix 1 motion_group nve                           # NVE integrator    
-fix 2 motion_group langevin 1.0 1.0 1.0 ${seed}  # Langevin thermostat
+fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
 
 # variable fz equal ramp(0,${stretch_force})
 # fix extension_force extension_group addforce 0.0 0.0 v_fz

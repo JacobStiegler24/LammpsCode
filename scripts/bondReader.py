@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import re as re
-from pprint import pprint
+from scipy import constants
 print('imported')
 
 # Point of script:
@@ -21,6 +21,7 @@ sigma = 22.5 # nm
 epsilon = 225 # nm*pN
 mass = 2.12 # E^-22 kg
 F = epsilon/sigma
+Temp = epsilon/constants.Boltzmann
 tau = sigma*np.sqrt(mass/epsilon)
 
 def readfile():
