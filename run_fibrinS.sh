@@ -6,7 +6,7 @@
 
 lmpinput="fibrin-monomer.lam"
 stretch_force=0.0 # must be a decimal
-seed="54654651" #54654653 54654659 54654661 54654685"
+seed="54654651 54654653 54654659 54654661 54654685"
 outdir="output"
 
 #=======================================
