@@ -81,7 +81,7 @@ def readfile():
                 if isItem:
                     netForce += float(line)
                     counter2 += 1
-                if counter2 == 1:
+                if counter2 == 2:
                     isItem = False
                     force_arr.append(netForce)
                     netForce = 0
@@ -116,7 +116,7 @@ def plotgraphs(data_df):
     blen_arr_series = data_df['lengths']
     btype_arr_series = data_df['types']
 
-    plt.figure(3)
+    plt.figure(1)
     for i in range(blen_arr_series.shape[0]):
         btype_arr = btype_arr_series[i]
         blen_arr = blen_arr_series[i]
@@ -124,7 +124,7 @@ def plotgraphs(data_df):
         mtype_arr = btype_arr[0] + btype_arr[1]
         bextension_arr = (blen_arr[0]+blen_arr[1]-blen_arr[0,0]-blen_arr[1,0]) * sigma
         plt.plot(bextension_arr, mforce_arr, linewidth=0.7)
-        plt.scatter(bextension_arr, mforce_arr, s=0.5, alpha=0.5, c=mtype_arr)
+        plt.scatter(bextension_arr, mforce_arr, s=2.5, alpha=0.7, c=mtype_arr)
 
     plt.xlabel('Extension (m)')
     plt.ylabel('Force (N)')
