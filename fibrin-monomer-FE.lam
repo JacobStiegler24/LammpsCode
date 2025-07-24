@@ -5,18 +5,18 @@
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
 variable K_r equal 100
-variable K_r_prime equal 9
+variable K_r_prime equal 50
 variable R0 equal 1
 variable R0_prime equal 1
 variable K_theta equal 100.0 
-# variable stretch_force equal 10.0
+variable stretch_velocity equal 0.1
 variable unfold_critical_distance equal 1.8
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 50000
-variable time_step equal 0.0001   # time step in picoseconds
+variable run_no equal 100000
+variable time_step equal 0.0005   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 5
 #########################################################################################
@@ -37,7 +37,7 @@ labelmap bond 1 fold 2 unfold
 #labelmap atom 1 D 2 E
 group reaction_group id 1
 group extension_group id 3  
-group motion_group id 2 3
+group motion_group id 2
 group rxn-group type D E
 
 pair_style lj/cut 10.0
@@ -56,7 +56,7 @@ fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
 
 # variable fz equal ramp(0,${stretch_force})
 # fix extension_force extension_group addforce 0.0 0.0 v_fz
-fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
+fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
 
 ############################################################################################
 # chatgpt, explain the terms
@@ -69,9 +69,11 @@ timestep ${time_step}                        # time step in picoseconds
 # Print to file commands  
 shell mkdir ${outdir}
 
+dump force_dump all custom ${dumpfreq} ${outdir}/force.dump fz
+
 compute bondlen all bond/local dist
 compute btype all property/local btype
-dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump all local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle

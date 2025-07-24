@@ -17,14 +17,14 @@ timestep = 0.0001 # lj
 nevery = 5 # how often data is dumped
 indextime = timestep * nevery # time between each data point in picoseconds
 
-sigma = 22.5 # nm
-epsilon = 225E-19 # J
+sigma = 22.5E-9 # m
+epsilon = 2.25E-20 # J
 mass = 2.12E-22 # kg
-F = (epsilon/sigma)*(10**18) # pN
-Temp = epsilon/constants.Boltzmann
-tau = (sigma**-9)*np.sqrt(mass/epsilon)
+F = (epsilon/sigma) # N
+T_LJ = 1.0 #18.4
+Temp = T_LJ*epsilon/constants.Boltzmann # K
+tau = (sigma)*np.sqrt(mass/epsilon) # s
 
-T_LJ = 0.1840865
 chosenForce = '0.0'
 
 def readfile():
@@ -338,6 +338,7 @@ def plotgraphs(data_df, monomer_df):
     plt.savefig(f'molecule_extension_Force{chosenForce.replace('.', '_')}.png', dpi=600, bbox_inches='tight')
 
     plt.show()
+
 
 def main():
     data_df = readfile()
