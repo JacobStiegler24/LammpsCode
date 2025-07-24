@@ -17,13 +17,17 @@ timestep = 0.0001 # lj
 nevery = 5 # how often data is dumped
 indextime = timestep * nevery # time between each data point in picoseconds
 
-sigma = 22.5 # nm
-epsilon = 225 # nm*pN
-mass = 2.12 # E^-22 kg
-F = epsilon/sigma
-Temp = epsilon/constants.Boltzmann
-tau = sigma*np.sqrt(mass/epsilon)
+sigma = 22.5E-9 # m
+epsilon = 2.25E-20 # J
+mass = 2.12E-22 # kg
+F = (epsilon/sigma) # N
+T_LJ = 1.0 #18.4
+Temp = T_LJ*epsilon/constants.Boltzmann # K
+tau = (sigma)*np.sqrt(mass/epsilon) # s
 
+print(f'sigma: {sigma} nm, epsilon: {epsilon} J, mass: {mass} kg, tau: {tau} s,') 
+print(f'F: {F} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}')
+print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 def readfile():
     # Change directory to the project folder
     path = os.path.join(os.getcwd(), r'output')
@@ -90,6 +94,8 @@ def compute(btype_arr, blen_arr):
     # Free energy + standard error
 
     mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
+    mean_extension_std = np.std(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
+    mean_extension_sem = mean_extension_std / np.sqrt(len(blen_arr[0]))
 
     timestep_no = len(btype_arr[1])
 
@@ -189,18 +195,18 @@ def compute(btype_arr, blen_arr):
     else:
         K_eq_FU = 10e40
         K_eq_UU = 10e40
-    return mean_extension, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, FU_mean_duration_se,\
+    return mean_extension, mean_extension_std, mean_extension_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, FU_mean_duration_se,\
         UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, K_eq_FU, K_eq_UU
 
-def weighted_avg_std_se(group, mean_col, se_col, std_col):
+def weighted_avg_std_se(group, mean_col, sem_col, std_col):
     # weighted average and standard error of the mean
     # pooled standard deviation. https://www.statisticshowto.com/pooled-standard-deviation
 
     mean = group[mean_col].values
     std = group[std_col].values
-    se = group[se_col].values
+    sem = group[sem_col].values
 
-    valid = (~np.isnan(mean)) & (~np.isnan(std)) & (se > 0) & (~np.isnan(se))
+    valid = (~np.isnan(mean)) & (~np.isnan(std)) & (sem > 0) & (~np.isnan(sem))
     if np.any(~valid):
         print(f"Valid mean/std/sem NaN or sem > 0 entries: {np.sum(valid)} out of {len(valid)}")
 
@@ -209,14 +215,15 @@ def weighted_avg_std_se(group, mean_col, se_col, std_col):
     
     mean = mean[valid]
     std = std[valid]
-    se = se[valid]
+    sem = sem[valid]
 
-    weights = 1 / se**2
+    weights = 1 / sem**2
     weighted_mean = np.sum(weights * mean) / np.sum(weights)
-    weighted_se = np.sqrt(1 / np.sum(weights))
-    weighted_std = np.sqrt(np.sum((std**2)) / (len(std)))  # pooled standard deviation
+    weighted_sem = np.sqrt(1 / np.sum(weights))
+    mean_std = np.mean(std)  # pooled standard deviation
+    mean_std_sem = np.std(std) / np.sqrt(len(std)+1)
 
-    return pd.Series({'mean': weighted_mean, 'std': weighted_std, 'sem': weighted_se})
+    return pd.Series({'mean': weighted_mean, 'std': mean_std, 'std_sem': mean_std_sem, 'sem': weighted_sem})
 
 def computeSeedAveraged(data_df):
     # Equilibrium constant and free energy calculations
@@ -232,24 +239,33 @@ def computeSeedAveraged(data_df):
     # print(data_force_groups)
     
     analysis_df = data_force_groups.agg({
-        'mean extension': ['mean', 'std', 'sem'],
         'FU fraction': ['mean', 'std', 'sem'],
         'UU fraction': ['mean', 'std', 'sem'],
         'FU equilibrium constant': ['mean', 'std', 'sem'],
         'UU equilibrium constant': ['mean', 'std', 'sem']
     })
 
+    mean_extension = data_df.groupby('force').apply(
+        lambda group: weighted_avg_std_se(
+            group, 'mean extension', 'extension sem', 'extension std'
+        )
+    )
+
     FU_duration = data_df.groupby('force').apply(
         lambda group: weighted_avg_std_se(
-            group, 'FU mean duration', 'FU mean duration se', 'FU mean duration std'
+            group, 'FU mean duration', 'FU mean duration sem', 'FU mean duration std'
         )
     )
     UU_duration = data_df.groupby('force').apply(
             lambda group: weighted_avg_std_se(
-                group, 'UU mean duration', 'UU mean duration se', 'UU mean duration std'
+                group, 'UU mean duration', 'UU mean duration sem', 'UU mean duration std'
         )
     )
 
+    analysis_df[('extension', 'mean')] = mean_extension['mean']
+    analysis_df[('extension', 'std')] = mean_extension['std']
+    analysis_df[('extension', 'std_sem')] = mean_extension['std_sem']  
+    analysis_df[('extension', 'sem')] = mean_extension['sem']
     analysis_df[('FU mean duration', 'mean')] = FU_duration['mean']
     analysis_df[('FU mean duration', 'std')]  = FU_duration['std']
     analysis_df[('FU mean duration', 'sem')]   = FU_duration['sem']
@@ -283,7 +299,7 @@ def main():
     force_seed_pairs = data_df[['force', 'seed']].drop_duplicates().values
     for force, seed in force_seed_pairs:
         
-        mean_extension, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, \
+        mean_extension, extension_std, extension_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, \
         FU_mean_duration_se, UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, \
         K_eq_FU, K_eq_UU \
         = compute(data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'types'].iloc[0], \
@@ -293,14 +309,16 @@ def main():
         "force": force * F,
         "seed": seed,
         "mean extension": mean_extension * sigma,
+        "extension std": extension_std * sigma,
+        "extension sem": extension_sem * sigma,
         "FU fraction": FU_fraction,
         "UU fraction": UU_fraction,
         "FU mean duration": FU_mean_duration * tau,
         "FU mean duration std": FU_mean_duration_std * tau,
-        "FU mean duration se": FU_mean_duration_se * tau,
+        "FU mean duration sem": FU_mean_duration_se * tau,
         "UU mean duration": UU_mean_duration * tau,
         "UU mean duration std": UU_mean_duration_std * tau,
-        "UU mean duration se": UU_mean_duration_se * tau,
+        "UU mean duration sem": UU_mean_duration_se * tau,
         "FU equilibrium constant": K_eq_FU,
         "UU equilibrium constant": K_eq_UU
         }
@@ -325,5 +343,34 @@ def main():
     print(os.getcwd())
 
     monomer_df.to_csv('data.csv')
-    print(monomer_df)
+
+    os.chdir('..')
+    path = os.path.join(os.getcwd(), r'figures')
+    os.chdir(path)
+
+    plt.figure(1)
+
+    plt.scatter(monomer_df['extension', 'mean'], monomer_df.index, c = 'r')
+    plt.errorbar(monomer_df['extension', 'mean'], monomer_df.index,
+                 xerr=monomer_df[('extension', 'sem')], ecolor='black', capsize=2)
+
+    plt.xlabel('extension (m)')
+    plt.ylabel('force (N)')   
+    plt.title('Molecule Force-Extension')
+    plt.legend()
+
+    plt.savefig('moleculeFE.png', dpi=600, bbox_inches='tight')
+
+    plt.figure(2)
+    x = np.linspace(0, 1, 100)*1000
+    y = sigma * np.sqrt(T_LJ/x)
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.plot(x, y, label='Standard deviation against spring constant', color='red')
+    plt.errorbar(100, monomer_df.loc[0, ('extension', 'std')], yerr=monomer_df.loc[0, ('extension', 'std_sem')], capsize=2, ecolor='black')
+
+    plt.savefig('std_vs_spring_constant.png', dpi=600, bbox_inches='tight')
+
+    plt.show()
+
 main()

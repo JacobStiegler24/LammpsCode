@@ -4,22 +4,22 @@ OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:99
 ############################################################################################
 # Variables
 # sigma = 22.25 nm
-# epsilon = 2.53E-22 J
-# 1 lj force unit = 11.25 pN
+# epsilon = 2.25E-20 J
+# 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-variable K_r equal 18.40865
-variable K_r_prime equal 10
+variable K_r equal 100
+variable K_r_prime equal 50
 variable R0 equal 1
 variable R0_prime equal 1
-variable K_theta equal 30.0
-# variable stretch_force equal 10.0
+variable K_theta equal 100.0
+variable stretch_velocity equal 0.1
 variable unfold_critical_distance equal 1.8
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
-variable temp equal 0.1840865
+variable temp equal 1.0
 
-variable run_no equal 50000
-variable time_step equal 0.0001   # time step in picoseconds
+variable run_no equal 100000
+variable time_step equal 0.0005   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 5
 #########################################################################################
@@ -56,7 +56,7 @@ Finding 1-2 1-3 1-4 neighbors ...
      1 = max # of 1-4 neighbors
      2 = max # of special neighbors
   special bonds CPU = 0.000 seconds
-  read_data CPU = 0.002 seconds
+  read_data CPU = 0.001 seconds
 
 labelmap atom 1 D 2 E
 labelmap bond 1 fold 2 unfold
@@ -66,8 +66,8 @@ group reaction_group id 1
 1 atoms in group reaction_group
 group extension_group id 3
 1 atoms in group extension_group
-group motion_group id 2 3
-2 atoms in group motion_group
+group motion_group id 2
+1 atoms in group motion_group
 group rxn-group type D E
 3 atoms in group rxn-group
 
@@ -76,27 +76,27 @@ pair_coeff * * 0.0 0.0
 
 bond_style harmonic         # harmonic bond
 bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
-bond_coeff 1 18.40865 ${R0}     
-bond_coeff 1 18.40865 1     
+bond_coeff 1 100 ${R0}     
+bond_coeff 1 100 1     
 bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
-bond_coeff 2 10 ${R0_prime}     
-bond_coeff 2 10 1     
+bond_coeff 2 50 ${R0_prime}     
+bond_coeff 2 50 1     
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
-angle_coeff 1 30 180.0   
+angle_coeff 1 100 180.0   
 
 #exclude atom 1
 fix 1 motion_group nve                           # NVE integrator
 fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
-fix 2 motion_group langevin 0.1840865 ${temp} 1.0 ${seed}  
-fix 2 motion_group langevin 0.1840865 0.1840865 1.0 ${seed}  
-fix 2 motion_group langevin 0.1840865 0.1840865 1.0 54654685  
+fix 2 motion_group langevin 1 ${temp} 1.0 ${seed}  
+fix 2 motion_group langevin 1 1 1.0 ${seed}  
+fix 2 motion_group langevin 1 1 1.0 54654685  
 
 # variable fz equal ramp(0,${stretch_force})
 # fix extension_force extension_group addforce 0.0 0.0 v_fz
-fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
-fix extension_force extension_group addforce 0.0 0.0 20.0
+fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
+fix extension_force extension_group move linear 0.0 0.0 0.1
 
 ############################################################################################
 # chatgpt, explain the terms
@@ -104,33 +104,33 @@ fix extension_force extension_group addforce 0.0 0.0 20.0
 ############################################################################################
 
 timestep ${time_step}                        # time step in picoseconds
-timestep 0.0001                        
+timestep 0.0005                        
 
 ############################################################################################
 # Print to file commands
 shell mkdir ${outdir}
-shell mkdir output/Force20.0_Seed54654685
+shell mkdir output/Force-ExtensionSeed54654685
 
-dump force_dump extension_group custom ${dumpfreq} ${outdir}/force.dump fz
-dump force_dump extension_group custom 5 ${outdir}/force.dump fz
-dump force_dump extension_group custom 5 output/Force20.0_Seed54654685/force.dump fz
+dump force_dump all custom ${dumpfreq} ${outdir}/force.dump fz
+dump force_dump all custom 5 ${outdir}/force.dump fz
+dump force_dump all custom 5 output/Force-ExtensionSeed54654685/force.dump fz
 
 compute bondlen all bond/local dist
 compute btype all property/local btype
 dump bondlen_dump all local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
 dump bondlen_dump all local 5 ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump all local 5 output/Force20.0_Seed54654685/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump all local 5 output/Force-ExtensionSeed54654685/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
 dump angle_dump all local 5 ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 5 output/Force20.0_Seed54654685/angles.dump c_myAngle
+dump angle_dump all local 5 output/Force-ExtensionSeed54654685/angles.dump c_myAngle
 shell mv angles.dump output
 WARNING: Shell command 'mv angles.dump output' returned with non-zero status (src/input.cpp:1268)
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
 dump dum1 all custom 5 ${outdir}/dum1.dump id type x y z ix iy iz 
-dump dum1 all custom 5 output/Force20.0_Seed54654685/dum1.dump id type x y z ix iy iz 
+dump dum1 all custom 5 output/Force-ExtensionSeed54654685/dum1.dump id type x y z ix iy iz 
 write_data datafile.data
 System init for write_data ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
@@ -219,7 +219,7 @@ dynamic group bond_react_MASTER_group defined
 ############################################################################################
 
 run ${run_no}
-run 50000
+run 100000
 
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
@@ -288,25 +288,25 @@ Neighbor list info ...
       stencil: none
       bin: none
 WARNING: Dump force_dump includes no atom IDs and is not sorted by ID. This may complicate post-processing tasks or visualization (src/dump.cpp:220)
-Per MPI rank memory allocation (min/avg/max) = 5.874 | 5.874 | 5.874 Mbytes
+Per MPI rank memory allocation (min/avg/max) = 6.249 | 6.249 | 6.249 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
          0   0              0              0              0              0            
-     50000   0.23661228     0              4.3413093      4.5779216     -2.0099526e-06
-Loop time of 0.392202 on 1 procs for 50000 steps with 3 atoms
+    100000   6.6952207      0              208.59433      215.28955     -5.7041259e-05
+Loop time of 0.70392 on 1 procs for 100000 steps with 3 atoms
 
-Performance: 1101472.069 tau/day, 127485.193 timesteps/s, 382.456 katom-step/s
-90.2% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 6137064.473 tau/day, 142061.678 timesteps/s, 426.185 katom-step/s
+87.3% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 0.0037606  | 0.0037606  | 0.0037606  |   0.0 |  0.96
-Bond    | 0.0084468  | 0.0084468  | 0.0084468  |   0.0 |  2.15
-Neigh   | 0.057409   | 0.057409   | 0.057409   |   0.0 | 14.64
-Comm    | 0.012321   | 0.012321   | 0.012321   |   0.0 |  3.14
-Output  | 0.16423    | 0.16423    | 0.16423    |   0.0 | 41.87
-Modify  | 0.13703    | 0.13703    | 0.13703    |   0.0 | 34.94
-Other   |            | 0.009006   |            |       |  2.30
+Pair    | 0.0066663  | 0.0066663  | 0.0066663  |   0.0 |  0.95
+Bond    | 0.016231   | 0.016231   | 0.016231   |   0.0 |  2.31
+Neigh   | 0.085985   | 0.085985   | 0.085985   |   0.0 | 12.22
+Comm    | 0.02057    | 0.02057    | 0.02057    |   0.0 |  2.92
+Output  | 0.31085    | 0.31085    | 0.31085    |   0.0 | 44.16
+Modify  | 0.24837    | 0.24837    | 0.24837    |   0.0 | 35.28
+Other   |            | 0.01525    |            |       |  2.17
 
 Nlocal:              3 ave           3 max           3 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
@@ -318,7 +318,7 @@ Histogram: 1 0 0 0 0 0 0 0 0 0
 Total # of neighbors = 0
 Ave neighs/atom = 0
 Ave special neighs/atom = 2
-Neighbor list builds = 1256
+Neighbor list builds = 2254
 Dangerous builds = 0
 
 # unfix extension_force

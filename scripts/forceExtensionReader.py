@@ -2,110 +2,140 @@ print('start')
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import re as re
+from scipy import constants
 print('imported')
+
+# Point of script:
+# One/two bond unfolded fractions
+# Mean time one/two unfolded + std/se
+# Free energy + standard error
+
 # Constants
-timestep = 0.002 # lj
+timestep = 0.0001 # lj
 nevery = 5 # how often data is dumped
 indextime = timestep * nevery # time between each data point in picoseconds
 
-sigma = 22.5 # nm
-epsilon = 225 # nm*pN
-mass = 2.12 # E^-22 kg
-tau = sigma*np.sqrt(mass/epsilon)
+sigma = 22.5E-9 # m
+epsilon = 2.25E-20 # J
+mass = 2.12E-22 # kg
+F = (epsilon/sigma) # N
+T_LJ = 1.0 #18.4
+Temp = T_LJ*epsilon/constants.Boltzmann # K
+tau = (sigma)*np.sqrt(mass/epsilon) # s
+
 
 def readfile():
     # Change directory to the project folder
-    os.chdir(r'\\wsl.localhost\Ubuntu\home\jacob\projects\Fibrin-Monomer\output\forceExtension')
+    path = os.path.join(os.getcwd(), r'output')
+    os.chdir(path)
     print(os.getcwd())
-
-    force_lst = [] 
-
-    folder_lst = os.listdir()
     
-    # https://docs.python.org/3/library/re.html
-    # https://docs.python.org/3/howto/regex.html#regex-howto
-    for folder in folder_lst:
-        match = re.search(r'Force(\d+\.\d+)?', folder)
-        if match and (match.group(0) not in force_lst):
-            force_lst.append(match.group(0))
 
-    force_lst.sort()
-    folder_lst.sort()
+    folder_lst = sorted(os.listdir())
+    rows = []
 
-    data_dict = {} # hierarchy: force -> seed -> types, lengths
-    counter = 0
+    folder_num = len(folder_lst)
+    counter = 1
     for folder in folder_lst:
-        os.chdir(rf'\\wsl.localhost\Ubuntu\home\jacob\projects\Fibrin-Monomer\output\forceExtension\{folder}')
-        btype = [[],[]]
-        blen = [[],[]]
+        # https://docs.python.org/3/library/re.html
+        # https://docs.python.org/3/howto/regex.html#regex-howto
+        
+        seed_match = re.search(r'Force-ExtensionSeed(\d+)', folder)
+        
+
+        if not (seed_match):
+            continue
+
+        print(seed_match)
+
+        seed = int(seed_match.group(1))
+
+        folder_path = os.path.join(os.getcwd(), folder)
+        os.chdir(folder_path)
+
+        btype_lst = [[],[]]
+        blen_lst = [[],[]]
+
         with open('bondlengths.dump') as f:
             isItem = False
             counter2 = 0
             for line in f:
                 if isItem:
-                    btype[counter2].append(line[0])
-                    blen[counter2].append(line[2::].strip(' \n'))
+                    btype_lst[counter2].append(line[0])
+                    blen_lst[counter2].append(line[2::].strip(' \n'))
                     counter2 += 1
                 if counter2 == 2:
                     isItem = False
                     counter2 = 0
                 if 'ENTRIES c_btype c_bondlen' in line:
                     isItem = True
+        
+        force_arr = []
+        with open('force.dump') as f:
+            isItem = False
+            counter2 = 0
+            netForce = 0
+            for line in f:
+                if isItem:
+                    netForce += float(line)
+                    counter2 += 1
+                if counter2 == 1:
+                    isItem = False
+                    force_arr.append(netForce)
+                    netForce = 0
+                    counter2 = 0
+                if 'ITEM: ATOMS fz' in line:
+                    isItem = True
 
-        btype_arr = np.array(btype).astype(int)
-        blen_arr = np.array(blen).astype(np.float64)
-        
-        for force in force_lst:
-            if force in folder:
-                found_force = float(force.strip('Force'))
-                if found_force not in data_dict:
-                    data_dict[found_force] = {}
-                    counter = 0
-        
-        data_dict[found_force][counter] = {
-            'types': btype_arr,
-            'lengths': blen_arr
+        row = {
+            "seed": seed,
+            "force": np.array(force_arr, dtype=np.float64)*F,
+            "lengths": np.array(blen_lst, dtype=np.float64)*sigma,
+            "types": np.array(btype_lst, dtype=int)
         }
+        rows.append(row)
+        os.chdir('..')
+        print(f'{counter}/{folder_num} folders read')
         counter += 1
 
-    return data_dict
 
-def lengthStats(blen_arr):
-    mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
-    print(f'mean seed extension: {mean_extension}')
-    return mean_extension
+    df = pd.DataFrame(rows)
 
+    return df
 
-data_dict = readfile()
+def plotgraphs(data_df):
+    # Plotting the b lengths over time
+    os.chdir(r'..') 
+    path = os.path.join(os.getcwd(), r'figures')
+    os.chdir(path)
+    print(os.getcwd())
 
-analysis_dict = {} # hierarchy: force -> mean extension
+    mforce_arr_series = data_df['force']
+    blen_arr_series = data_df['lengths']
+    btype_arr_series = data_df['types']
 
-force_lst = list(data_dict.keys())
-force_lst.sort()
-seedN_lst = list(data_dict[force_lst[0]].keys())
+    plt.figure(3)
+    for i in range(blen_arr_series.shape[0]):
+        btype_arr = btype_arr_series[i]
+        blen_arr = blen_arr_series[i]
+        mforce_arr = mforce_arr_series[i]
+        mtype_arr = btype_arr[0] + btype_arr[1]
+        bextension_arr = (blen_arr[0]+blen_arr[1]-blen_arr[0,0]-blen_arr[1,0]) * sigma
+        plt.plot(bextension_arr, mforce_arr, linewidth=0.7)
+        plt.scatter(bextension_arr, mforce_arr, s=0.5, alpha=0.5, c=mtype_arr)
 
-extension_lst = []
-for force in force_lst:
-    mean_seed_extension_lst = []
-    for seed in seedN_lst:
-        mean_seed_extension_lst.append(lengthStats(data_dict[force][seed]['lengths'])*sigma)
-    extension_lst.append(np.mean(mean_seed_extension_lst))
+    plt.xlabel('Extension (m)')
+    plt.ylabel('Force (N)')
+    plt.title(f'Molecule Force/Extension')
 
-for index in range(len(force_lst)):
-    force_lst[index] = float(force_lst[index])*10*epsilon/sigma
+    plt.savefig(f'MoleculeMoveFE.png', dpi=600, bbox_inches='tight')
 
-os.chdir(r'\\wsl.localhost\Ubuntu\home\jacob\projects\Fibrin-Monomer')
+    plt.show()
 
-plt.figure(1)
+def main():
+    data_df = readfile()
+    plotgraphs(data_df)
 
-plt.scatter(extension_lst, force_lst, c = 'r')
-plt.plot(extension_lst, force_lst)
-
-plt.xlabel('extension (nm)')
-plt.ylabel('force (pN)')   
-plt.title('Molecule Force-Extension')
-plt.legend()
-
-plt.savefig('figures/moleculeFE.png', dpi=600, bbox_inches='tight')
-plt.show()
+main()
