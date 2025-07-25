@@ -54,8 +54,6 @@ angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
 fix 1 motion_group nve                           # NVE integrator    
 fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
 
-# variable fz equal ramp(0,${stretch_force})
-# fix extension_force extension_group addforce 0.0 0.0 v_fz
 fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
 
 ############################################################################################
