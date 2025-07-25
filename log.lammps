@@ -93,8 +93,6 @@ fix 2 motion_group langevin 1 ${temp} 1.0 ${seed}
 fix 2 motion_group langevin 1 1 1.0 ${seed}  
 fix 2 motion_group langevin 1 1 1.0 54654685  
 
-# variable fz equal ramp(0,${stretch_force})
-# fix extension_force extension_group addforce 0.0 0.0 v_fz
 fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
 fix extension_force extension_group move linear 0.0 0.0 0.1
 
@@ -292,21 +290,21 @@ Per MPI rank memory allocation (min/avg/max) = 6.249 | 6.249 | 6.249 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
          0   0              0              0              0              0            
     100000   6.6952207      0              208.59433      215.28955     -5.7041259e-05
-Loop time of 0.70392 on 1 procs for 100000 steps with 3 atoms
+Loop time of 0.687222 on 1 procs for 100000 steps with 3 atoms
 
-Performance: 6137064.473 tau/day, 142061.678 timesteps/s, 426.185 katom-step/s
-87.3% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 6286175.110 tau/day, 145513.313 timesteps/s, 436.540 katom-step/s
+89.6% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 0.0066663  | 0.0066663  | 0.0066663  |   0.0 |  0.95
-Bond    | 0.016231   | 0.016231   | 0.016231   |   0.0 |  2.31
-Neigh   | 0.085985   | 0.085985   | 0.085985   |   0.0 | 12.22
-Comm    | 0.02057    | 0.02057    | 0.02057    |   0.0 |  2.92
-Output  | 0.31085    | 0.31085    | 0.31085    |   0.0 | 44.16
-Modify  | 0.24837    | 0.24837    | 0.24837    |   0.0 | 35.28
-Other   |            | 0.01525    |            |       |  2.17
+Pair    | 0.007546   | 0.007546   | 0.007546   |   0.0 |  1.10
+Bond    | 0.014412   | 0.014412   | 0.014412   |   0.0 |  2.10
+Neigh   | 0.093529   | 0.093529   | 0.093529   |   0.0 | 13.61
+Comm    | 0.020699   | 0.020699   | 0.020699   |   0.0 |  3.01
+Output  | 0.29595    | 0.29595    | 0.29595    |   0.0 | 43.06
+Modify  | 0.23945    | 0.23945    | 0.23945    |   0.0 | 34.84
+Other   |            | 0.01564    |            |       |  2.28
 
 Nlocal:              3 ave           3 max           3 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
