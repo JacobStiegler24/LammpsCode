@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re as re
 from scipy import constants
+from scipy.stats import sem
+from math import floor, log10
 print('imported')
 
 # Point of script:
@@ -30,7 +32,8 @@ print(f'F: {F} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}
 print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'output')
+    print(os.getcwd())
+    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
     os.chdir(path)
     print(os.getcwd())
 
@@ -71,12 +74,24 @@ def readfile():
                 if 'ENTRIES c_btype c_bondlen' in line:
                     isItem = True
         
+        bangle_lst = []
+        with open('angles.dump') as f:
+            isItem = False
+            for line in f:
+                if isItem:
+                    isItem = False
+                    bangle_lst.append(line)
+                if 'ITEM: ENTRIES c_myAngle' in line:
+                    isItem = True
+
         row = {
             "force": force,
             "seed": seed,
             "types": np.array(btype_lst, dtype=int),
-            "lengths": np.array(blen_lst, dtype=np.float64)
+            "lengths": np.array(blen_lst, dtype=np.float64),
+            "angle": np.array(bangle_lst, dtype=np.float64)
         }
+
         rows.append(row)
         os.chdir('..')
         print(f'{counter}/{folder_num} folders read')
@@ -86,21 +101,28 @@ def readfile():
 
     return df
 
-def compute(btype_arr, blen_arr):
+def compute(btype_arr, blen_arr, bangle_arr):
     # Calculate:
     # Mean extension
     # One/two bond unfolded fractions
     # Mean time one/two unfolded + std/se
     # Free energy + standard error
 
-    mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
-    mean_extension_std = np.std(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
-    mean_extension_sem = mean_extension_std / np.sqrt(len(blen_arr[0]))
+    # mean_extension = np.mean(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
+    # extension_std = np.std(blen_arr[0]+blen_arr[1]-blen_arr[0][0]-blen_arr[1][0])
+    # extension_sem = extension_std / np.sqrt(len(blen_arr[0]))
 
-    timestep_no = len(btype_arr[1])
+    length_mean = np.mean(blen_arr[0]+blen_arr[1])
+    length_std = np.std(blen_arr[0]+blen_arr[1])
+    length_sem = length_std / np.sqrt(len(blen_arr[0]))
 
+    mean_angle = np.mean(bangle_arr)* np.pi / 180
+    angle_std = np.std(bangle_arr) * np.pi / 180
+    angle_sem = angle_std / np.sqrt(len(bangle_arr))
+    
     #######################################################################################
     # unfolded fractions
+    timestep_no = len(btype_arr[1])
 
     UU_count = 0
     FU_count = 0
@@ -195,7 +217,7 @@ def compute(btype_arr, blen_arr):
     else:
         K_eq_FU = 10e40
         K_eq_UU = 10e40
-    return mean_extension, mean_extension_std, mean_extension_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, FU_mean_duration_se,\
+    return length_mean, length_std, length_sem, mean_angle, angle_std, angle_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, FU_mean_duration_se,\
         UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, K_eq_FU, K_eq_UU
 
 def weighted_avg_std_se(group, mean_col, sem_col, std_col):
@@ -221,9 +243,13 @@ def weighted_avg_std_se(group, mean_col, sem_col, std_col):
     weighted_mean = np.sum(weights * mean) / np.sum(weights)
     weighted_sem = np.sqrt(1 / np.sum(weights))
     mean_std = np.mean(std)  # pooled standard deviation
-    mean_std_sem = np.std(std) / np.sqrt(len(std)+1)
+    mean_std_sem = np.std(std) / np.sqrt(2*len(std)-2)
 
     return pd.Series({'mean': weighted_mean, 'std': mean_std, 'std_sem': mean_std_sem, 'sem': weighted_sem})
+
+def round_sig(x, sig=2):
+    # https://stackoverflow.com/a/3413529
+    return round(x, sig-int(floor(log10(abs(x))))-1)
 
 def computeSeedAveraged(data_df):
     # Equilibrium constant and free energy calculations
@@ -233,21 +259,23 @@ def computeSeedAveraged(data_df):
 
     
     data_force_groups = data_df.groupby(['force'], group_keys=True)
-    # print(data_df.columns)
-    # print(data_df.head)
-    # print('------------------------------------')
-    # print(data_force_groups)
     
     analysis_df = data_force_groups.agg({
         'FU fraction': ['mean', 'std', 'sem'],
         'UU fraction': ['mean', 'std', 'sem'],
         'FU equilibrium constant': ['mean', 'std', 'sem'],
-        'UU equilibrium constant': ['mean', 'std', 'sem']
+        'UU equilibrium constant': ['mean', 'std', 'sem'],
     })
 
-    mean_extension = data_df.groupby('force').apply(
+    extension = data_df.groupby('force').apply(
         lambda group: weighted_avg_std_se(
             group, 'mean extension', 'extension sem', 'extension std'
+        )
+    )
+
+    angle = data_df.groupby('force').apply(
+        lambda group: weighted_avg_std_se(
+            group, 'angle', 'angle sem', 'angle std'
         )
     )
 
@@ -262,10 +290,14 @@ def computeSeedAveraged(data_df):
         )
     )
 
-    analysis_df[('extension', 'mean')] = mean_extension['mean']
-    analysis_df[('extension', 'std')] = mean_extension['std']
-    analysis_df[('extension', 'std_sem')] = mean_extension['std_sem']  
-    analysis_df[('extension', 'sem')] = mean_extension['sem']
+    analysis_df[('extension', 'mean')] = extension['mean']
+    analysis_df[('extension', 'std')] = extension['std']
+    analysis_df[('extension', 'std_sem')] = extension['std_sem']  
+    analysis_df[('extension', 'sem')] = extension['sem']
+    analysis_df[('angle', 'mean')] = angle['mean']
+    analysis_df[('angle', 'std')] = angle['std']
+    analysis_df[('angle', 'std_sem')] = angle['std_sem']
+    analysis_df[('angle', 'sem')] = angle['sem']
     analysis_df[('FU mean duration', 'mean')] = FU_duration['mean']
     analysis_df[('FU mean duration', 'std')]  = FU_duration['std']
     analysis_df[('FU mean duration', 'sem')]   = FU_duration['sem']
@@ -296,21 +328,27 @@ def computeSeedAveraged(data_df):
 def main():
     data_df = readfile()
     rows = []
+    data_df.sort_values(by=['force', 'seed'], inplace=True)
     force_seed_pairs = data_df[['force', 'seed']].drop_duplicates().values
     for force, seed in force_seed_pairs:
         
-        mean_extension, extension_std, extension_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, \
+        mean_extension, extension_std, extension_sem, mean_angle, angle_std, angle_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, \
         FU_mean_duration_se, UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, \
         K_eq_FU, K_eq_UU \
         = compute(data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'types'].iloc[0], \
-                data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'lengths'].iloc[0])
+                data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'lengths'].iloc[0], \
+                    data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'angle'].iloc[0]
+                )
 
         row = {
-        "force": force * F,
+        "force": force, # * F
         "seed": seed,
         "mean extension": mean_extension * sigma,
         "extension std": extension_std * sigma,
         "extension sem": extension_sem * sigma,
+        "angle": mean_angle,
+        "angle std": angle_std,
+        "angle sem": angle_sem,
         "FU fraction": FU_fraction,
         "UU fraction": UU_fraction,
         "FU mean duration": FU_mean_duration * tau,
@@ -322,6 +360,7 @@ def main():
         "FU equilibrium constant": K_eq_FU,
         "UU equilibrium constant": K_eq_UU
         }
+
         if (FU_fraction > 0 and FU_mean_duration == 0) or (UU_fraction > 0 and UU_mean_duration == 0):
             print(f"[WARNING] Fraction > 0 but duration == 0 → Force: {force}, Seed: {seed}")
             print(f"  FU fraction: {FU_fraction}, FU duration: {FU_mean_duration}")
@@ -335,7 +374,30 @@ def main():
     monomer_df = computeSeedAveraged(monomer_df)
     monomer_df.sort_values(by='force')
 
+    df1 = data_df.groupby(['force']).agg({
+        'lengths': lambda x: np.concatenate(x.to_numpy()),  # shape: (num_groups, 2, N)
+        'angle': lambda x: np.concatenate(x.to_numpy())
+    })
 
+    summed_lengths = np.array([arr[0, :] + arr[1, :] for arr in df1['lengths']])
+    angles = np.array([val for val in df1['angle']])/180
+
+    mean_r = np.mean(summed_lengths, axis=1) / (2)
+    mean_t = np.mean(angles, axis=1)
+
+    std_r = np.std(summed_lengths, axis=1) / (2)
+    std_t = np.std(angles, axis=1)
+
+    std_sem_r = sem(summed_lengths, axis=1) / (2)
+    std_sem_t = sem(angles, axis = 1)
+
+    monomer_df.loc[df1.index, ('extension', 'std')] = std_r
+    monomer_df.loc[df1.index, ('extension', 'mean')] = mean_r
+    monomer_df.loc[df1.index, ('extension', 'std_sem')] = std_sem_r
+
+    monomer_df.loc[df1.index, ('angle', 'std')] = std_t
+    monomer_df.loc[df1.index, ('angle', 'mean')] = mean_t
+    monomer_df.loc[df1.index, ('angle', 'std_sem')] = std_sem_t
 
     os.chdir('..')
     path = os.path.join(os.getcwd(), r'data files')
@@ -348,28 +410,41 @@ def main():
     path = os.path.join(os.getcwd(), r'figures')
     os.chdir(path)
 
-    plt.figure(1)
-
-    plt.scatter(monomer_df['extension', 'mean'], monomer_df.index, c = 'r')
-    plt.errorbar(monomer_df['extension', 'mean'], monomer_df.index,
-                 xerr=monomer_df[('extension', 'sem')], ecolor='black', capsize=2)
-
-    plt.xlabel('extension (m)')
-    plt.ylabel('force (N)')   
-    plt.title('Molecule Force-Extension')
-    plt.legend()
+    plt.figure()
 
     plt.savefig('moleculeFE.png', dpi=600, bbox_inches='tight')
 
-    plt.figure(2)
-    x = np.linspace(0, 1, 100)*1000
-    y = sigma * np.sqrt(T_LJ/x)
+    plt.figure()
+    x = np.linspace(0.01, 0.5, 100)*1000
+    y = np.sqrt(T_LJ/(2*x))
     plt.yscale('log')
     plt.xscale('log')
-    plt.plot(x, y, label='Standard deviation against spring constant', color='red')
-    plt.errorbar(100, monomer_df.loc[0, ('extension', 'std')], yerr=monomer_df.loc[0, ('extension', 'std_sem')], capsize=2, ecolor='black')
+    plt.xlabel('spring constant (lj)')
+    plt.ylabel('bond length std (m)')
+    plt.title('Length std against spring constant at 0N')
+    plt.plot(x, y, color='red')
+    plt.errorbar(49, std_r[0], \
+                yerr=std_sem_r[0], capsize=2, ecolor='black', fmt='.', \
+                label=f'bond length ratio std {round_sig(std_r[0])} ± \
+                {round_sig(std_sem_r[0])}')
+    plt.legend(loc='upper right')
+    plt.savefig('blength_std_vs_spring_constant.png', dpi=600)
 
-    plt.savefig('std_vs_spring_constant.png', dpi=600, bbox_inches='tight')
+    plt.figure(3)
+    x = np.linspace(0, 100, 200)
+    y = np.sqrt(T_LJ/(x))/np.pi
+    plt.title('Angle std against spring constant at 0N')
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.xlabel('angular spring constant (lj)')
+    plt.ylabel('angle std (rad)')
+    plt.plot(x, y, color='red')
+    plt.errorbar(2.3, std_t[0], \
+                yerr=std_sem_t[0], capsize=2, ecolor='black', fmt='.', \
+                label=f'angle std ratio {round_sig(std_t[0])} ± \
+                {round_sig(std_sem_t[0])}')
+    plt.legend(loc='upper right')
+    plt.savefig('bangle_std_vs_spring_constant.png', dpi=600)
 
     plt.show()
 

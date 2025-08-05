@@ -29,7 +29,7 @@ chosenForce = '0.0'
 
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'output')
+    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
     os.chdir(path)
     print(os.getcwd())
     
@@ -306,9 +306,9 @@ def plotgraphs(data_df, monomer_df):
 
     plt.xlabel('Time (ns)')
     plt.ylabel('Bond Length (nm)')   
-    plt.title(f'Bond 1 Lengths/Time With Force {chosenForce.replace('.', '_')} (pN)')
+    plt.title(f'Bond 1 Lengths/Time With Force {chosenForce} (pN)')
 
-    plt.savefig(f'b1Lengths_Force{chosenForce.replace('.', '_')}.png', dpi=600, bbox_inches='tight')
+    plt.savefig(f'b1Lengths_Force{chosenForce}.png', dpi=600, bbox_inches='tight')
 
     plt.figure(2)
     for i in range(blen_arr_series.shape[0]):
@@ -321,21 +321,21 @@ def plotgraphs(data_df, monomer_df):
 
     plt.xlabel('Time (ns)')
     plt.ylabel('Bond Length (nm)')
-    plt.title(f'Bond 2 Lengths/Time With Force {chosenForce.replace('.', '_')} (pN)')
+    plt.title(f'Bond 2 Lengths/Time With Force {chosenForce} (pN)')
 
-    plt.savefig(f'b2lengths_Force{chosenForce.replace('.', '_')}.png', dpi=600, bbox_inches='tight')
+    plt.savefig(f'b2lengths_Force{chosenForce}.png', dpi=600, bbox_inches='tight')
 
     plt.figure(3)
     for i in range(blen_arr_series.shape[0]):
-        blen_arr = blen_arr_series[i][0]+blen_arr_series[i][1] * sigma
+        blen_arr = (blen_arr_series[i][0]+blen_arr_series[i][1])* sigma
         t = np.arange(len(blen_arr)) * timestep * tau
         plt.plot(t, blen_arr, linewidth=0.7)
 
     plt.xlabel('Time (ns)')
-    plt.ylabel('Molecule Extension (nm)')
-    plt.title(f'Molecule Extension/Time With Force {chosenForce.replace('.', '_')} (pN)')
+    plt.ylabel('Molecule Length (nm)')
+    plt.title(f'Molecule Length/Time With Force {chosenForce} (pN)')
 
-    plt.savefig(f'molecule_extension_Force{chosenForce.replace('.', '_')}.png', dpi=600, bbox_inches='tight')
+    plt.savefig(f'molecule_length_Force{chosenForce}.png', dpi=600, bbox_inches='tight')
 
     plt.show()
 
