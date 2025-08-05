@@ -28,7 +28,7 @@ tau = (sigma)*np.sqrt(mass/epsilon) # s
 
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'output')
+    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
     os.chdir(path)
     print(os.getcwd())
     

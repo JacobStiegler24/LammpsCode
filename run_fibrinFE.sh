@@ -13,7 +13,7 @@ outdir="output"
 
 # Run simulations
 for seedval in $seed ; do
-  outdir="output/Force-ExtensionSeed${seedval}"
+  outdir="output/ForceExtension/Force-ExtensionSeed${seedval}"
   mkdir -p "$outdir"
   ./lmp_mpi \
     -var seed "$seedval" \

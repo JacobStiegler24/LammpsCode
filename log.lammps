@@ -7,19 +7,19 @@ OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:99
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-variable K_r equal 100
-variable K_r_prime equal 50
+# variable K_r equal 22
+variable K_r_prime equal 10
 variable R0 equal 1
 variable R0_prime equal 1
-variable K_theta equal 100.0
-variable stretch_velocity equal 0.1
+# variable K_theta equal 2.3
+# variable stretch_force equal 10.0
 variable unfold_critical_distance equal 1.8
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 100000
-variable time_step equal 0.0005   # time step in picoseconds
+variable run_no equal 50000
+variable time_step equal 0.01   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 5
 #########################################################################################
@@ -66,8 +66,8 @@ group reaction_group id 1
 1 atoms in group reaction_group
 group extension_group id 3
 1 atoms in group extension_group
-group motion_group id 2
-1 atoms in group motion_group
+group motion_group id 2 3
+2 atoms in group motion_group
 group rxn-group type D E
 3 atoms in group rxn-group
 
@@ -76,15 +76,15 @@ pair_coeff * * 0.0 0.0
 
 bond_style harmonic         # harmonic bond
 bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
-bond_coeff 1 100 ${R0}     
-bond_coeff 1 100 1     
+bond_coeff 1 90.0 ${R0}     
+bond_coeff 1 90.0 1     
 bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
-bond_coeff 2 50 ${R0_prime}     
-bond_coeff 2 50 1     
+bond_coeff 2 10 ${R0_prime}     
+bond_coeff 2 10 1     
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
-angle_coeff 1 100 180.0   
+angle_coeff 1 20.0 180.0   
 
 #exclude atom 1
 fix 1 motion_group nve                           # NVE integrator
@@ -93,8 +93,10 @@ fix 2 motion_group langevin 1 ${temp} 1.0 ${seed}
 fix 2 motion_group langevin 1 1 1.0 ${seed}  
 fix 2 motion_group langevin 1 1 1.0 54654685  
 
-fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
-fix extension_force extension_group move linear 0.0 0.0 0.1
+# variable fz equal ramp(0,${stretch_force})
+# fix extension_force extension_group addforce 0.0 0.0 v_fz
+fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
+fix extension_force extension_group addforce 0.0 0.0 0.0
 
 ############################################################################################
 # chatgpt, explain the terms
@@ -102,33 +104,29 @@ fix extension_force extension_group move linear 0.0 0.0 0.1
 ############################################################################################
 
 timestep ${time_step}                        # time step in picoseconds
-timestep 0.0005                        
+timestep 0.01                        
 
 ############################################################################################
 # Print to file commands
 shell mkdir ${outdir}
-shell mkdir output/Force-ExtensionSeed54654685
-
-dump force_dump all custom ${dumpfreq} ${outdir}/force.dump fz
-dump force_dump all custom 5 ${outdir}/force.dump fz
-dump force_dump all custom 5 output/Force-ExtensionSeed54654685/force.dump fz
+shell mkdir output/CORR/k_r90.0_k_theta20.0Seed54654685
 
 compute bondlen all bond/local dist
 compute btype all property/local btype
-dump bondlen_dump all local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump all local 5 ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump all local 5 output/Force-ExtensionSeed54654685/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local 5 ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local 5 output/CORR/k_r90.0_k_theta20.0Seed54654685/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
 dump angle_dump all local 5 ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 5 output/Force-ExtensionSeed54654685/angles.dump c_myAngle
+dump angle_dump all local 5 output/CORR/k_r90.0_k_theta20.0Seed54654685/angles.dump c_myAngle
 shell mv angles.dump output
 WARNING: Shell command 'mv angles.dump output' returned with non-zero status (src/input.cpp:1268)
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
 dump dum1 all custom 5 ${outdir}/dum1.dump id type x y z ix iy iz 
-dump dum1 all custom 5 output/Force-ExtensionSeed54654685/dum1.dump id type x y z ix iy iz 
+dump dum1 all custom 5 output/CORR/k_r90.0_k_theta20.0Seed54654685/dum1.dump id type x y z ix iy iz 
 write_data datafile.data
 System init for write_data ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
@@ -144,7 +142,6 @@ Neighbor list info ...
       pair build: half/bin/newton
       stencil: half/bin/3d
       bin: standard
-WARNING: Dump force_dump includes no atom IDs and is not sorted by ID. This may complicate post-processing tasks or visualization (src/dump.cpp:220)
 WARNING: Not all mixed pair coeffs generated from mixing. Use write_data with 'pair ij' option to store all pair coeffs. (src/write_data.cpp:364)
 ############################################################################################
 
@@ -217,7 +214,7 @@ dynamic group bond_react_MASTER_group defined
 ############################################################################################
 
 run ${run_no}
-run 100000
+run 50000
 
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
@@ -285,26 +282,25 @@ Neighbor list info ...
       pair build: copy
       stencil: none
       bin: none
-WARNING: Dump force_dump includes no atom IDs and is not sorted by ID. This may complicate post-processing tasks or visualization (src/dump.cpp:220)
-Per MPI rank memory allocation (min/avg/max) = 6.249 | 6.249 | 6.249 Mbytes
+Per MPI rank memory allocation (min/avg/max) = 5.874 | 5.874 | 5.874 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
          0   0              0              0              0              0            
-    100000   6.6952207      0              208.59433      215.28955     -5.7041259e-05
-Loop time of 0.687222 on 1 procs for 100000 steps with 3 atoms
+     50000   0.57971817     0              0.47820446     1.0579226     -3.1776895e-08
+Loop time of 0.240179 on 1 procs for 50000 steps with 3 atoms
 
-Performance: 6286175.110 tau/day, 145513.313 timesteps/s, 436.540 katom-step/s
-89.6% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 179866117.405 tau/day, 208178.377 timesteps/s, 624.535 katom-step/s
+101.4% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 0.007546   | 0.007546   | 0.007546   |   0.0 |  1.10
-Bond    | 0.014412   | 0.014412   | 0.014412   |   0.0 |  2.10
-Neigh   | 0.093529   | 0.093529   | 0.093529   |   0.0 | 13.61
-Comm    | 0.020699   | 0.020699   | 0.020699   |   0.0 |  3.01
-Output  | 0.29595    | 0.29595    | 0.29595    |   0.0 | 43.06
-Modify  | 0.23945    | 0.23945    | 0.23945    |   0.0 | 34.84
-Other   |            | 0.01564    |            |       |  2.28
+Pair    | 0.0032537  | 0.0032537  | 0.0032537  |   0.0 |  1.35
+Bond    | 0.0069531  | 0.0069531  | 0.0069531  |   0.0 |  2.89
+Neigh   | 0.015844   | 0.015844   | 0.015844   |   0.0 |  6.60
+Comm    | 0.0096835  | 0.0096835  | 0.0096835  |   0.0 |  4.03
+Output  | 0.098052   | 0.098052   | 0.098052   |   0.0 | 40.82
+Modify  | 0.099552   | 0.099552   | 0.099552   |   0.0 | 41.45
+Other   |            | 0.006841   |            |       |  2.85
 
 Nlocal:              3 ave           3 max           3 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
@@ -316,7 +312,7 @@ Histogram: 1 0 0 0 0 0 0 0 0 0
 Total # of neighbors = 0
 Ave neighs/atom = 0
 Ave special neighs/atom = 2
-Neighbor list builds = 2254
+Neighbor list builds = 433
 Dangerous builds = 0
 
 # unfix extension_force
@@ -326,7 +322,6 @@ Dangerous builds = 0
 write_restart final.restart
 System init for write_restart ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
-WARNING: Dump force_dump includes no atom IDs and is not sorted by ID. This may complicate post-processing tasks or visualization (src/dump.cpp:220)
 
 # statistics
 # file structure
