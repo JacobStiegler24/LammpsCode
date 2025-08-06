@@ -15,8 +15,8 @@ variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 50000
-variable time_step equal 0.01   # time step in picoseconds
+variable run_no equal 500000
+variable time_step equal 0.001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 5
 #########################################################################################

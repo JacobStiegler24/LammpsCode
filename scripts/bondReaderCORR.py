@@ -247,7 +247,7 @@ def main():
     plt.yscale('log')
     plt.xscale('log')
     x = np.linspace(0.5, 12, 100)
-    y = np.sqrt(T_LJ/(x))/(np.sqrt(6)*np.pi)
+    y = np.sqrt(T_LJ/(x))/(np.pi*np.pi)
     plt.plot(x, y, color='red')
 
     plt.errorbar(
