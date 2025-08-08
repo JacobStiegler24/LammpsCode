@@ -8,8 +8,8 @@ lmpinput="fibrin-monomer.lam"
 stretch_force=0.0 # must be decimal values. 
 #| xargs -n1 printf "%.1f\n" from chatgpt to make forces a decimal for all increments.
 seed="54654651 54654653 54654659 54654661 54654685"
-k_r_arr=25.0 #$(seq 24.5 0.5 25.5 | xargs -n1 printf "%.1f\n")
-k_theta_arr=$(seq 1 1 20 | xargs -n1 printf "%.1f\n")
+k_r_arr=$(seq 0.2 1 10 | xargs -n1 printf "%.1f\n")
+k_theta_arr=$(seq 1 3 15 | xargs -n1 printf "%.1f\n")
 
 #=======================================
 

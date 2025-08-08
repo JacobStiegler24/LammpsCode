@@ -4,21 +4,21 @@
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-# variable K_r equal 22
+# variable K_r equal 4.25
 variable K_r_prime equal 10
 variable R0 equal 1
 variable R0_prime equal 1
-# variable K_theta equal 2.3
+# variable K_theta equal 7.7885
 # variable stretch_force equal 10.0
 variable unfold_critical_distance equal 1.8
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 500000
-variable time_step equal 0.001   # time step in picoseconds
+variable run_no equal 50000
+variable time_step equal 0.01   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
-variable dumpfreq equal 5
+variable dumpfreq equal 100
 #########################################################################################
 
 units lj                # Lennard-Jones units
