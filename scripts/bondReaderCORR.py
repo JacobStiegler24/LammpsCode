@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re as re
 from scipy import constants
+from scipy import integrate
 from math import floor, log10
 print('imported')
 
@@ -31,7 +32,10 @@ print(f'F: {F} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}
 print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output/CORR')
+    print(os.getcwd())
+    os.chdir('..')
+    print(os.getcwd())
+    path = os.path.join(os.getcwd(), r'Fibrin-Monomer\output\CORR')
     os.chdir(path)
     print(os.getcwd())
 
@@ -89,10 +93,11 @@ def readfile():
         
         row = {
             "seed": seed,
-            "K_r": k_r/2,
-            "K_theta": k_t/2,
+            "K_r": k_r*2,
+            "K_theta": k_t*2,
             "types": np.array(btype_lst, dtype=int),
             "lengths": mlen_arr,
+            "bond lengths": np.array(blen_lst),
             "angle": np.array(bangle_lst, dtype=np.float64)
         }
 
@@ -121,43 +126,148 @@ def round_sig(x, sig=2):
     # https://stackoverflow.com/a/3413529
     return round(x, sig-int(floor(log10(abs(x))))-1)
 
+def ZTheta(theta, k_t):
+    exponent = (-k_t/(2*T_LJ))*(theta-np.pi)**2
+    integrand =  np.sin(theta)*np.exp(exponent)
+    return integrand
+
+def Zr_bond(r, k_r):
+    exponent = (-k_r/(2*T_LJ))*(r-1)**2
+    integrand = r**2*np.exp(exponent)
+    return integrand
+
+def ExpectedThetaIntegral(theta, k_t):
+    exponent = (-k_t/(2*T_LJ))*(theta-np.pi)**2
+    integrand =  theta*np.sin(theta)*np.exp(exponent)
+    return integrand
+
+def ExpectedTheta(k_t):
+    Z, Zerr = integrate.quad(ZTheta, 0, np.pi, args=(k_t,))
+    invZ = 1/Z
+    invZerr = Zerr/(Z**2)
+
+    integral , err = integrate.quad(ExpectedThetaIntegral, 0, np.pi, args=(k_t,))
+    expectedTheta = invZ*integral
+    expectedTheta_err = expectedTheta*(invZerr/invZ + err/integral)
+    return expectedTheta, expectedTheta_err
+
+def ExpectedRIntegral_bond(r, k_r):
+    exponent = (-k_r/(2*T_LJ))*(r-1)**2
+    integrand = r**3*np.exp(exponent)
+    return integrand
+
+def ExpectedRSqrIntegral_bond(r, k_r):
+    exponent = (-k_r/(2*T_LJ))*(r-1)**2
+    integrand = r**4*np.exp(exponent)
+    return integrand
+
+def ExpectedR(k_r):
+    Z, Zerr = integrate.quad(Zr_bond, 0, np.inf, args=(k_r,))
+    invZ = 1/Z
+    invZerr = Zerr/(Z**2)
+
+    integral , err = integrate.quad(ExpectedRIntegral_bond, 0, np.inf, args=(k_r,))
+    expectedR_new = invZ*integral*2
+    return expectedR_new
+
+def ExpectedRSqr(k_r):
+    Z, Zerr = integrate.quad(Zr_bond, 0, np.inf, args=(k_r,))
+    invZ = 1/Z
+    invZerr = Zerr/(Z**2)
+
+    integral, err = integrate.quad(ExpectedRSqrIntegral_bond, 0, np.inf, args=(k_r,))
+    expectedR_sqr_new = invZ*integral*2 + 2*(invZ*integral)**2
+
+    return expectedR_sqr_new
+
+def VarR(k_r):
+    
+    expectedR = ExpectedR(k_r)
+    expectedRSqr = ExpectedRSqr(k_r)
+
+    var = expectedRSqr-expectedR**2
+    return var
+
+def stats(data_df):
+    rt_pairs = data_df[['K_r', 'K_theta']].drop_duplicates().values
+    
+
+    std_r = []
+    sem_std_r = []
+    mean_r = []
+    sem_r = []
+    mean_t = []
+    sem_t = []
+    std_t = []
+    sem_std_t = []
+
+    for k_r, k_t in rt_pairs:
+        try:
+            std_r.append(np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0]))
+            sem_std_r.append((np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0]))/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0])))
+            
+            mean_r.append(np.mean(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0]))
+            sem_r.append((np.mean(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0]))/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0])))
+
+            std_t.append(np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])*np.pi/180)
+            sem_std_t.append((np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])*np.pi/180)/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])))
+
+            mean_t.append(np.mean(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])*np.pi/180)
+            sem_t.append((np.mean(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])*np.pi/180)/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])))
+
+        except ValueError as e:
+            print(f"Error calculating std for k_r={k_r}, k_t={k_t}: {e}")
+            std_r.append(np.nan)
+            sem_std_r.append(np.nan)
+
+            mean_r.append(np.nan)
+            mean_r.append(np.nan)
+
+            mean_t.append(np.nan)
+            sem_t.append(np.nan)
+
+    #mean_r_arr = np.array(mean_r, dtype=np.float64)
+    mean_t_arr = np.array(mean_t, dtype=np.float64)
+
+    #delta_r = np.abs(mean_r_arr-0.1)
+    delta_t = np.abs(np.pi-mean_t_arr-0.1)
+    #delta = delta_r**2 + delta_t**2
+
+    print(f'index closest to 10%: {delta_t.argmin()}')
+    #print(f'sigma_r: {sigma_r_arr[delta.argmin()]}, sigma_t: {sigma_t_arr[delta.argmin()]}')
+    print(f'mean_t: {mean_t_arr[delta_t.argmin()]}')
+    print(f'k_r: {rt_pairs[delta_t.argmin()][0]}, k_t: {rt_pairs[delta_t.argmin()][1]}')
+
+    #k_r = data_df['K_r'].iloc[np.where(delta_t < 0.001)]
+    #k_t = data_df['K_theta'].iloc[np.where(delta_t < 0.001)]
+
+    #corr = np.corrcoef((sigma_r), np.log(sigma_t))
+    #print("Correlation coefficient:", corr)
+
+    monomer_df = pd.DataFrame({
+        "K_r": data_df['K_r'],
+        "K_theta": data_df['K_theta'],
+
+        "r mean": mean_r,
+        "r sem": sem_r,
+        "r std": std_r,
+        "r std sem": sem_std_r,
+
+        "theta mean": mean_t_arr,
+        "theta sem": sem_t,
+        "theta std": std_t,
+        "theta std sem": sem_std_t,
+
+        "lengths": data_df['lengths'].values,
+        "angles": data_df['angle'].values,
+    })
+    return monomer_df 
+
 def main():
     data_df = readfile()
     data_df.sort_values(by=['K_r', 'K_theta'], inplace=True)
     
-    rt_pairs = data_df[['K_r', 'K_theta']].drop_duplicates().values
-    
-    sigma_r = []
-    sigma_t = []
-    sigma_r_sem = []
-    sigma_t_sem = []
-
-    for k_r, k_t in rt_pairs:
-        try:
-            sigma_r.append(np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0])/2)
-            sigma_r_sem.append((np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0])/2)/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['lengths'].iloc[0])))
-            sigma_t.append(np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])/180)
-            sigma_t_sem.append((np.std(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])/180)/np.sqrt(len(data_df[(data_df['K_r'] == k_r) & (data_df['K_theta'] == k_t)]['angle'].iloc[0])))
-        except ValueError as e:
-            print(f"Error calculating std for k_r={k_r}, k_t={k_t}: {e}")
-            sigma_r.append(np.nan)
-            sigma_t.append(np.nan)
-            
-    sigma_r_arr = np.array(sigma_r, dtype=np.float64)
-    sigma_t_arr = np.array(sigma_t, dtype=np.float64)
-    delta_r = np.abs(sigma_r_arr-0.1)
-    delta_t = np.abs(sigma_t_arr-0.1)
-    delta = delta_r**2 + delta_t**2
-
-    print(f'index closest to 10%: {delta.argmin()}')
-    print(f'sigma_r: {sigma_r_arr[delta.argmin()]}, sigma_t: {sigma_t_arr[delta.argmin()]}')
-    print(f'k_r: {rt_pairs[delta.argmin()][0]}, k_t: {rt_pairs[delta.argmin()][1]}')
-
-    k_r = data_df['K_r'].iloc[np.where(delta < 0.001)]
-    k_t = data_df['K_theta'].iloc[np.where(delta < 0.001)]
-
-    corr = np.corrcoef((sigma_r), np.log(sigma_t))
-    print("Correlation coefficient:", corr)
+    monomer_df = stats(data_df)
 
     os.chdir('..')
     os.chdir('..')
@@ -165,64 +275,21 @@ def main():
     os.chdir(path)
     print(os.getcwd())
 
-    monomer_df = pd.DataFrame({
-        "K_r": data_df['K_r'],
-        "K_theta": data_df['K_theta'],
-        "sigma_r": sigma_r,
-        "sigma_r_sem": sigma_r_sem,
-        "sigma_t": sigma_t,
-        "sigma_t_sem": sigma_t_sem,
-        "lengths": data_df['lengths'].values,
-        "angles": data_df['angle'].values,
-    })
-
-    # plt.figure(0)
-    # r_vals = data_df[['K_r']].drop_duplicates().values.flatten()    
-    # norm = plt.Normalize(vmin=min(r_vals), vmax=max(r_vals))
-    # cmap = plt.get_cmap('plasma')
-    # sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    # for k_r in r_vals:
-    #     plt.plot(
-    #         monomer_df[monomer_df['K_r'] == k_r]['K_theta'],
-    #         monomer_df[monomer_df['K_r'] == k_r]['sigma_r'],
-    #         c=cmap(norm(k_r))
-    #     )
-    # plt.colorbar(sm, label='K_r')
-    # plt.xlabel('K_theta')
-    # plt.ylabel('Sigma_r / 2 lj (molecule)')
-    # plt.legend()
-    # plt.savefig('sigmar_kt_line.png', dpi=1000)
-
-    # plt.figure(1)
-    # t_vals = data_df[['K_theta']].drop_duplicates().values.flatten()
-    # norm = plt.Normalize(vmin=min(t_vals), vmax=max(t_vals))
-    # sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    # for k_t in t_vals:
-    #     plt.plot(
-    #         monomer_df[monomer_df['K_theta'] == k_t]['K_r'],
-    #         monomer_df[monomer_df['K_theta'] == k_t]['sigma_t'],
-    #         c=cmap(norm(k_t))
-    #     )
-    # plt.colorbar(sm, label='K_theta')
-    # plt.xlabel('K_r')
-    # plt.ylabel('Sigma_theta / 180')
-    # plt.legend()
-    # plt.savefig('sigmat_kr_line.png', dpi=1000)
-
-    
-    plt.figure(2)
-    plt.yscale('log')
-    plt.xscale('log')
-    x = np.linspace(1, 60, 200)
-    y = np.sqrt(T_LJ/(8*(x)))
-    plt.xlim(2,60)
-    plt.ylim(0.04,0.2)
-    plt.plot(x, y, color='red')
-
+    plt.figure(1)
+    plt.ylim(0,5)
+    x = np.linspace(0.01, 20, 200)
+    p = np.sqrt(np.array([VarR(i) for i in x]))
+    print('sigma---------------------')
+    print(p)
+    l = (np.array([ExpectedR(i) for i in x]))
+    print('<R>-----------------------')
+    print(l)
+    y = p/l
+    plt.plot(x, l, label='theory <R>')
     plt.errorbar(
         monomer_df['K_r'],
-        monomer_df['sigma_r'],
-        yerr=monomer_df['sigma_r_sem'],
+        ((monomer_df['r mean'])),
+        yerr=(monomer_df['r sem']),
         color='black',
         fmt='.',   
         markersize=1,
@@ -232,28 +299,55 @@ def main():
     )
     plt.scatter(
         monomer_df['K_r'],
-        monomer_df['sigma_r'],
+        (monomer_df['r mean']),
         c=monomer_df['K_theta'],
         s=10
     )
     plt.colorbar(label='K_theta')
     plt.xlabel('K_r')
-    plt.ylabel('Sigma_r / 2 lj (molecule)')
-    plt.title('Sigma_r / monomer R_0 coloured by K_theta (logxy)')
+    plt.ylabel('<R> (lj)')
+    plt.title('Expected monomer length coloured by K_theta (logxy)')
     plt.legend()
-    plt.savefig('sigma_k_r.png', dpi=1000)
 
+
+    plt.figure(2)
+    plt.ylim(0,5)
+    plt.plot(x, l, label='theory std')
+
+    plt.errorbar(
+        monomer_df['K_r'],
+        ((monomer_df['r std'])),
+        yerr=(monomer_df['r std sem']),
+        color='black',
+        fmt='.',   
+        markersize=1,
+        capsize=2,
+        capthick=0.5,
+        elinewidth=0.3
+    )
+    plt.scatter(
+        monomer_df['K_r'],
+        (monomer_df['r std']),
+        c=monomer_df['K_theta'],
+        s=10
+    )
+    plt.colorbar(label='K_theta')
+    plt.xlabel('K_r')
+    plt.ylabel('r std (lj)')
+    plt.title('std of monomer length coloured by K_theta (logxy)')
+    plt.legend()
+
+    plt.legend()
+   
     plt.figure(3)
-    plt.yscale('log')
-    plt.xscale('log')
-    x = np.linspace(0.5, 12, 100)
-    y = np.sqrt(T_LJ/(x))/(np.pi*np.pi)
-    plt.plot(x, y, color='red')
+    x = np.linspace(0.1, 40, 200)
+    y = np.array([ExpectedTheta(i) for i in x])
+    plt.plot(x, (y[:,0]), color='red')
 
     plt.errorbar(
         monomer_df['K_theta'],
-        monomer_df['sigma_t'],
-        yerr=monomer_df['sigma_t_sem'],
+        monomer_df['theta mean'],
+        yerr=monomer_df['theta sem'],
         color='black',
         fmt='.',      # adds point markers
         markersize=1,
@@ -263,18 +357,16 @@ def main():
     )
     plt.scatter(
         monomer_df['K_theta'],
-        monomer_df['sigma_t'],
+        (monomer_df['theta mean']),
         c=monomer_df['K_r'],
         s=10
     )
     plt.colorbar(label='K_r')
     plt.xlabel('K_theta')
-    plt.ylabel('Sigma_theta / 180')
-    plt.title('Sigma_theta / theta_0 coloured by K_r (logxy)')
+    plt.ylabel('Mean theta (rad)')
+    plt.title('Mean theta coloured by K_r (logxy)')
     plt.legend()
-    plt.savefig('sigma_k_t.png', dpi=1000)
-
     plt.show()
+    # monomer_df.to_csv('corr_data.csv')
 
-    monomer_df.to_csv('corr_data.csv')
 main()
