@@ -1,0 +1,123 @@
+############################################################################################
+# Variables
+# sigma = 22.25 nm
+# epsilon = 2.25E-20 J
+# 1 lj force unit = 1 pN
+# 1 lj spring constant = 0.5 micro N/m
+
+variable R0 equal 1
+variable K_r equal 2
+ 
+variable K_theta equal 7.7885
+
+variable temp equal 1.0
+
+variable run_no equal 800000
+variable time_step equal 0.005   # time step in picoseconds
+variable seed equal 54654652     # random number seed
+variable dumpfreq equal 100
+#########################################################################################
+
+units lj                # Lennard-Jones units
+atom_style angle        # atoms with bonds and angles
+
+boundary p p p          # all boundaries are periodic
+
+neighbor 1.9 bin
+neigh_modify every 1 delay 1 check yes
+
+read_data initial_configuration.txt
+
+
+labelmap atom 1 D 2 E
+labelmap bond 1 fold #2 unfold
+
+#labelmap atom 1 D 2 E
+group reaction_group id 1
+group extension_group id 3  
+group motion_group id 2 3
+group rxn-group type D E
+
+#pair_style lj/cut 10.0
+#pair_coeff * * 0.0 0.0
+
+bond_style harmonic         # harmonic bond
+bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
+bond_coeff 2 ${K_r} ${R0}     # args: bond type, K, R0
+
+
+angle_style harmonic             # harmonic bond angular component
+angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
+
+#exclude atom 1
+fix 1 motion_group nve                           # NVE integrator    
+fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
+
+
+
+############################################################################################
+# chatgpt, explain the terms
+#fix keepcenter all recenter INIT INIT INIT
+############################################################################################
+
+timestep ${time_step}                        # time step in picoseconds
+
+############################################################################################
+# Print to file commands  
+
+
+compute bondlen all bond/local dist
+compute btype all property/local btype
+dump bondlen_dump extension_group local ${dumpfreq} CS/bondlengths.dump c_btype c_bondlen
+
+compute myAngle all angle/local theta
+dump angle_dump all local ${dumpfreq} CS/angles.dump c_myAngle
+#shell mv angles.dump output
+
+#dump dum1 all custom ${dumpfreq} Fibrin/dum1.dump id type x y z ix iy iz #look into generating folder
+#write_data datafile.data
+
+group D1 id 1
+group D2 id 3
+group E id 2
+
+compute cD1 D1 com
+compute cD2 D2 com
+compute cE  E  com
+
+
+variable dx1 equal c_cD1[1]-c_cE[1]
+variable dy1 equal c_cD1[2]-c_cE[2]
+variable dz1 equal c_cD1[3]-c_cE[3]
+variable dx2 equal c_cD2[1]-c_cE[1]
+variable dy2 equal c_cD2[2]-c_cE[2]
+variable dz2 equal c_cD2[3]-c_cE[3]
+variable RE equal sqrt(v_dx1*v_dx1+v_dy1*v_dy1+v_dz1*v_dz1) #+ sqrt(v_dx2*v_dx2+v_dy2*v_dy2+v_dz2*v_dz2)
+
+variable another_angle equal ((v_dx1*v_dx2+v_dy1*v_dy2+v_dz1*v_dz2)/(v_RE1*v_RE2))
+
+
+#compute CSangle all angle/local theta
+#variable the_angle equal c_CSangle[1]
+
+fix myRG2file all print 100 "${RE}  "  file CS/bond_length.out screen no
+
+############################################################################################
+
+############################################################################################
+
+
+############################################################################################
+
+run ${run_no}  
+
+# unfix extension_force
+
+# run ${run_no}  # run again to allow the system to relax after the reactions
+
+write_restart final.restart
+
+# statistics
+# file structure
+# angular potential
+# folding/unfolding efficiency
