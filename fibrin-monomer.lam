@@ -15,8 +15,8 @@ variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 50000
-variable time_step equal 0.01   # time step in picoseconds
+variable run_no equal 800000
+variable time_step equal 0.005   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 100
 #########################################################################################
@@ -79,26 +79,45 @@ shell mv angles.dump output
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
 write_data datafile.data
+
+# group D1 id 1
+# group D2 id 3
+# group E id 2
+
+# compute cD1 D1 com
+# compute cD2 D2 com
+# compute cE  E  com
+
+
+# variable dx1 equal c_cD1[1]-c_cE[1]
+# variable dy1 equal c_cD1[2]-c_cE[2]
+# variable dz1 equal c_cD1[3]-c_cE[3]
+# variable dx2 equal c_cD2[1]-c_cE[1]
+# variable dy2 equal c_cD2[2]-c_cE[2]
+# variable dz2 equal c_cD2[3]-c_cE[3]
+# variable RE equal sqrt(v_dx1*v_dx1+v_dy1*v_dy1+v_dz1*v_dz1) #+ sqrt(v_dx2*v_dx2+v_dy2*v_dy2+v_dz2*v_dz2)
+
+# fix myRG2file all print 100 "${RE}  "  file ${outdir}/bond_length.out screen no
 ############################################################################################
 
 ############################################################################################
 # Molecule change for unfolding/folding
 
-molecule folded m_folded.txt
-molecule unfolded m_unfolded.txt
-molecule D1E2D m_D1E2D.txt
-molecule D2E1D m_D2E1D.txt
+# molecule folded m_folded.txt
+# molecule unfolded m_unfolded.txt
+# molecule D1E2D m_D1E2D.txt
+# molecule D2E1D m_D2E1D.txt
 
-# test without unfolding for angular bond
-fix rxn1 all bond/react & 
-  react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
-  react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
-  react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} &
-  react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #&
-  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} &
-  react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} &
-  react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} &
-  react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+# # test without unfolding for angular bond
+# fix rxn1 all bond/react & 
+#   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
+#   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
+#   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} &
+#   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #&
+#   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} &
+#   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} &
+#   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} &
+#   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
 
 
 # molecule fold m_fold.txt
