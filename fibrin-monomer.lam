@@ -4,19 +4,19 @@
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-# variable K_r equal 4.25
-variable K_r_prime equal 10
+# variable K_r equal 4.1535
+# variable K_r_prime equal 10
 variable R0 equal 1
-variable R0_prime equal 1
-# variable K_theta equal 7.7885
+variable R0_prime equal 2
+# variable K_theta equal 7.785
 # variable stretch_force equal 10.0
-variable unfold_critical_distance equal 1.8
+variable unfold_critical_distance equal 1.25
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 800000
-variable time_step equal 0.005   # time step in picoseconds
+variable run_no equal 1000000
+variable time_step equal 0.0001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 100
 #########################################################################################
@@ -43,9 +43,13 @@ group rxn-group type D E
 pair_style lj/cut 10.0
 pair_coeff * * 0.0 0.0
 
-bond_style harmonic         # harmonic bond
-bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
-bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
+bond_style hybrid harmonic fene         # harmonic bond
+bond_coeff 1 harmonic ${K_r} ${R0}     # args: bond type, bond style, K, R0
+bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 1.0     # args: bond type, bond style, K, R0, epsilon, sigma
+
+# bond_style harmonic       # harmonic bond
+# bond_coeff 1 ${K_r} ${R0}
+# bond_coeff 2 ${K_r_prime} ${R0_prime}
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
@@ -67,18 +71,15 @@ timestep ${time_step}                        # time step in picoseconds
 
 ############################################################################################
 # Print to file commands  
-shell mkdir ${outdir}
-
 compute bondlen all bond/local dist
 compute btype all property/local btype
 dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
-shell mv angles.dump output
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
-write_data datafile.data
+write_data ${outdir}/datafile.data
 
 # group D1 id 1
 # group D2 id 3

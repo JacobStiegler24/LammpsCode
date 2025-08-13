@@ -1,0 +1,57 @@
+LAMMPS data file via write_data, version 29 Aug 2024, timestep = 0, units = lj
+
+3 atoms
+2 atom types
+2 bonds
+2 bond types
+1 angles
+1 angle types
+
+0 100 xlo xhi
+0 100 ylo yhi
+0 1000 zlo zhi
+
+Atom Type Labels
+
+1 D
+2 E
+
+Bond Type Labels
+
+1 fold
+2 unfold
+
+Masses
+
+1 1
+2 0.67
+
+Pair Coeffs # lj/cut
+
+1 0 0
+2 0 0
+
+Angle Coeffs # harmonic
+
+1 7.785 180
+
+Atoms # angle
+
+1 1 1 0 0 0 0 0 0
+2 1 2 0 0 1 0 0 0
+3 1 1 0 0 2 0 0 0
+
+Velocities
+
+1 0 0 0
+2 0 0 0
+3 0 0 0
+
+Bonds
+
+1 2 1 2
+2 2 2 3
+
+Angles
+
+1 1 1 2 3

@@ -7,19 +7,19 @@ OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:99
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-# variable K_r equal 4.25
-variable K_r_prime equal 10
+# variable K_r equal 4.1535
+# variable K_r_prime equal 10
 variable R0 equal 1
-variable R0_prime equal 1
-# variable K_theta equal 7.7885
+variable R0_prime equal 2
+# variable K_theta equal 7.785
 # variable stretch_force equal 10.0
-variable unfold_critical_distance equal 1.8
+variable unfold_critical_distance equal 1.25
 variable fold_critical_distance equal 1
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 800000
-variable time_step equal 0.005   # time step in picoseconds
+variable run_no equal 1000000
+variable time_step equal 0.0001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 100
 #########################################################################################
@@ -56,7 +56,7 @@ Finding 1-2 1-3 1-4 neighbors ...
      1 = max # of 1-4 neighbors
      2 = max # of special neighbors
   special bonds CPU = 0.000 seconds
-  read_data CPU = 0.001 seconds
+  read_data CPU = 0.002 seconds
 
 labelmap atom 1 D 2 E
 labelmap bond 1 fold 2 unfold
@@ -74,17 +74,21 @@ group rxn-group type D E
 pair_style lj/cut 10.0
 pair_coeff * * 0.0 0.0
 
-bond_style harmonic         # harmonic bond
-bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
-bond_coeff 1 21.0 ${R0}     
-bond_coeff 1 21.0 1     
-bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
-bond_coeff 2 10 ${R0_prime}     
-bond_coeff 2 10 1     
+bond_style hybrid harmonic fene         # harmonic bond
+bond_coeff 1 harmonic ${K_r} ${R0}     # args: bond type, bond style, K, R0
+bond_coeff 1 harmonic 4.1535 ${R0}     
+bond_coeff 1 harmonic 4.1535 1     
+bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 1.0     # args: bond type, bond style, K, R0, epsilon, sigma
+bond_coeff 2 fene 31.0 ${R0_prime} 0.0 1.0     
+bond_coeff 2 fene 31.0 2 0.0 1.0     
+
+# bond_style harmonic       # harmonic bond
+# bond_coeff 1 ${K_r} ${R0}
+# bond_coeff 2 ${K_r_prime} ${R0_prime}
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
-angle_coeff 1 13.0 180.0   
+angle_coeff 1 7.785 180.0   
 
 #exclude atom 1
 fix 1 motion_group nve                           # NVE integrator
@@ -104,32 +108,29 @@ fix extension_force extension_group addforce 0.0 0.0 0.0
 ############################################################################################
 
 timestep ${time_step}                        # time step in picoseconds
-timestep 0.005                        
+timestep 0.0001                        
 
 ############################################################################################
 # Print to file commands
-shell mkdir ${outdir}
-shell mkdir output/CORR/k_r21.0_k_theta13.0Seed54654685
-
 compute bondlen all bond/local dist
 compute btype all property/local btype
 dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
 dump bondlen_dump extension_group local 100 ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump extension_group local 100 output/CORR/k_r21.0_k_theta13.0Seed54654685/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local 100 output/CORRuu/k_r_prime31.0_Seed54654685/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
 dump angle_dump all local 100 ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 100 output/CORR/k_r21.0_k_theta13.0Seed54654685/angles.dump c_myAngle
-shell mv angles.dump output
-WARNING: Shell command 'mv angles.dump output' returned with non-zero status (src/input.cpp:1268)
+dump angle_dump all local 100 output/CORRuu/k_r_prime31.0_Seed54654685/angles.dump c_myAngle
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
 dump dum1 all custom 100 ${outdir}/dum1.dump id type x y z ix iy iz 
-dump dum1 all custom 100 output/CORR/k_r21.0_k_theta13.0Seed54654685/dum1.dump id type x y z ix iy iz 
-write_data datafile.data
+dump dum1 all custom 100 output/CORRuu/k_r_prime31.0_Seed54654685/dum1.dump id type x y z ix iy iz 
+write_data ${outdir}/datafile.data
+write_data output/CORRuu/k_r_prime31.0_Seed54654685/datafile.data
 System init for write_data ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
 Neighbor list info ...
   update: every = 1 steps, delay = 1 steps, check = yes
   max neighbors/atom: 2000, page size: 100000
@@ -184,7 +185,7 @@ WARNING: Not all mixed pair coeffs generated from mixing. Use write_data with 'p
 ############################################################################################
 
 run ${run_no}
-run 800000
+run 1000000
 
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
@@ -205,25 +206,26 @@ Your simulation uses code contributions which should be cited:
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
-Per MPI rank memory allocation (min/avg/max) = 5.562 | 5.562 | 5.562 Mbytes
+WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
+Per MPI rank memory allocation (min/avg/max) = 5.573 | 5.573 | 5.573 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
-         0   0              0              0              0              0            
-    800000   1.3126111      0              0.80146654     2.1140777      2.0949836e-08
-Loop time of 0.715083 on 1 procs for 800000 steps with 3 atoms
+         0   0              0              11.890859      11.890859     -2.7555556e-06
+   1000000   0.23026969     0              1.9383759      2.1686456     -3.4086405e-07
+Loop time of 0.776518 on 1 procs for 1000000 steps with 3 atoms
 
-Performance: 483300372.323 tau/day, 1118750.862 timesteps/s, 3.356 Matom-step/s
-105.4% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 11126596.182 tau/day, 1287800.484 timesteps/s, 3.863 Matom-step/s
+93.8% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 0.031101   | 0.031101   | 0.031101   |   0.0 |  4.35
-Bond    | 0.085629   | 0.085629   | 0.085629   |   0.0 | 11.97
-Neigh   | 0.14049    | 0.14049    | 0.14049    |   0.0 | 19.65
-Comm    | 0.13722    | 0.13722    | 0.13722    |   0.0 | 19.19
-Output  | 0.077762   | 0.077762   | 0.077762   |   0.0 | 10.87
-Modify  | 0.1506     | 0.1506     | 0.1506     |   0.0 | 21.06
-Other   |            | 0.09228    |            |       | 12.91
+Pair    | 0.037211   | 0.037211   | 0.037211   |   0.0 |  4.79
+Bond    | 0.14483    | 0.14483    | 0.14483    |   0.0 | 18.65
+Neigh   | 0.0023134  | 0.0023134  | 0.0023134  |   0.0 |  0.30
+Comm    | 0.16799    | 0.16799    | 0.16799    |   0.0 | 21.63
+Output  | 0.10207    | 0.10207    | 0.10207    |   0.0 | 13.14
+Modify  | 0.19424    | 0.19424    | 0.19424    |   0.0 | 25.01
+Other   |            | 0.1279     |            |       | 16.47
 
 Nlocal:              3 ave           3 max           3 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
@@ -235,7 +237,7 @@ Histogram: 1 0 0 0 0 0 0 0 0 0
 Total # of neighbors = 0
 Ave neighs/atom = 0
 Ave special neighs/atom = 2
-Neighbor list builds = 4030
+Neighbor list builds = 56
 Dangerous builds = 0
 
 # unfix extension_force
@@ -245,6 +247,7 @@ Dangerous builds = 0
 write_restart final.restart
 System init for write_restart ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
 
 # statistics
 # file structure
