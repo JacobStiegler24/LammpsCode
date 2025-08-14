@@ -29,6 +29,8 @@ tau = (sigma)*np.sqrt(mass/epsilon) # s
 def readfile():
     # Change directory to the project folder
     path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
+    
+    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceExtension'
     os.chdir(path)
     print(os.getcwd())
     
@@ -72,27 +74,14 @@ def readfile():
                 if 'ENTRIES c_btype c_bondlen' in line:
                     isItem = True
         
-        force_arr = []
-        with open('force.dump') as f:
-            isItem = False
-            counter2 = 0
-            netForce = 0
-            for line in f:
-                if isItem:
-                    netForce += float(line)
-                    counter2 += 1
-                if counter2 == 2:
-                    isItem = False
-                    force_arr.append(netForce)
-                    netForce = 0
-                    counter2 = 0
-                if 'ITEM: ATOMS fz' in line:
-                    isItem = True
-
+        force_lst = []
+        with open('netforce.out') as f:
+            next(f)  # skip first line
+            force_arr = np.array([float(line.strip()) for line in f], dtype=float)
         row = {
             "seed": seed,
-            "force": np.array(force_arr, dtype=np.float64)*F,
-            "lengths": np.array(blen_lst, dtype=np.float64)*sigma,
+            "force": force_arr,
+            "lengths": np.array(blen_lst, dtype=np.float64),
             "types": np.array(btype_lst, dtype=int)
         }
         rows.append(row)
@@ -108,6 +97,9 @@ def readfile():
 def plotgraphs(data_df):
     # Plotting the b lengths over time
     os.chdir(r'..') 
+    print(os.getcwd())
+    os.chdir('..')
+    print(os.getcwd())
     path = os.path.join(os.getcwd(), r'figures')
     os.chdir(path)
     print(os.getcwd())
@@ -116,15 +108,49 @@ def plotgraphs(data_df):
     blen_arr_series = data_df['lengths']
     btype_arr_series = data_df['types']
 
+    sumrange = 1000
     plt.figure(1)
+    sc = None
     for i in range(blen_arr_series.shape[0]):
         btype_arr = btype_arr_series[i]
         blen_arr = blen_arr_series[i]
         mforce_arr = mforce_arr_series[i]
+
+        cumsum_force = np.cumsum(mforce_arr)
+        cumsum_force[sumrange:] = cumsum_force[sumrange:] - cumsum_force[:-sumrange]
+        moving_avg_force = cumsum_force[sumrange-1:] / sumrange
+
         mtype_arr = btype_arr[0] + btype_arr[1]
-        bextension_arr = (blen_arr[0]+blen_arr[1]-blen_arr[0,0]-blen_arr[1,0]) * sigma
-        plt.plot(bextension_arr, mforce_arr, linewidth=0.7)
-        plt.scatter(bextension_arr, mforce_arr, s=2.5, alpha=0.7, c=mtype_arr)
+        bextension_arr = (blen_arr[0]+blen_arr[1]-blen_arr[0,0]-blen_arr[1,0])
+
+        cumsum_extension = np.cumsum(bextension_arr)
+        cumsum_extension[sumrange:] = cumsum_extension[sumrange:] - cumsum_extension[:-sumrange]
+        moving_avg_extension = cumsum_extension[sumrange-1:] / sumrange
+
+        cumsum_type = np.cumsum(mtype_arr)
+        cumsum_type[sumrange:] = cumsum_type[sumrange:] - cumsum_type[:-sumrange]
+        moving_avg_type = cumsum_type[sumrange-1:] / sumrange
+
+        plt.plot(moving_avg_extension, moving_avg_force, linewidth=0.7)
+        plt.scatter(moving_avg_extension, moving_avg_force, s=2.5, alpha=0.7)
+
+        sc = plt.scatter(
+            moving_avg_extension,
+            moving_avg_force,
+            s=2.5,
+            alpha=0.7,
+            c=moving_avg_type,
+            cmap='viridis',
+            label=f'Seed {data_df["seed"][i]}'
+        )
+
+    plt.xlabel('Extension (m)')
+    plt.ylabel('Force (N)')
+    plt.title('Molecule Force/Extension')
+
+    # Add colourbar for type
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Type')
 
     plt.xlabel('Extension (m)')
     plt.ylabel('Force (N)')

@@ -4,21 +4,23 @@
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-variable K_r equal 22
-variable K_r_prime equal 50
+# variable K_r equal 22
+# variable K_r_prime equal 50
 variable R0 equal 1
-variable R0_prime equal 1
-variable K_theta equal 2.3
-variable stretch_velocity equal 0.1
-variable unfold_critical_distance equal 1.8
-variable fold_critical_distance equal 1
+variable R0_prime equal 2
+# variable K_theta equal 2.3
+
+variable unfold_critical_distance equal 1.5
+variable fold_critical_distance equal 0.5
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 1000000
-variable time_step equal 0.0001   # time step in picoseconds
+variable run_no equal 10000000
+variable time_step equal 0.000001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
-variable dumpfreq equal 5
+variable dumpfreq equal 100
+
+variable stretch_velocity equal 1.975*${R0_prime}/(${time_step}*${run_no})  # stretch velocity in nm/ps
 #########################################################################################
 
 units lj                # Lennard-Jones units
@@ -38,14 +40,15 @@ labelmap bond 1 fold 2 unfold
 group reaction_group id 1
 group extension_group id 3  
 group motion_group id 2
+group measure_group id 1 2
 group rxn-group type D E
 
 pair_style lj/cut 10.0
 pair_coeff * * 0.0 0.0
 
-bond_style harmonic         # harmonic bond
-bond_coeff 1 ${K_r} ${R0}     # args: bond type, K, R0
-bond_coeff 2 ${K_r_prime} ${R0_prime}     # args: bond type, K, R0
+bond_style hybrid harmonic fene         # harmonic bond
+bond_coeff 1 harmonic ${K_r} ${R0}     # args: bond type, bond style, K, R0
+bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 1.0     # args: bond type, bond style, K, R0, epsilon, sigma
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
@@ -65,9 +68,11 @@ timestep ${time_step}                        # time step in picoseconds
 
 ############################################################################################
 # Print to file commands  
-shell mkdir ${outdir}
-
-dump force_dump all custom ${dumpfreq} ${outdir}/force.dump fz
+compute fx measure_group reduce sum fx
+compute fy measure_group reduce sum fy
+compute fz measure_group reduce sum fz
+variable net_force equal c_fz # sqrt(c_fx*c_fx+c_fy*c_fy+c_fz*c_fz)
+fix myNetforce all print ${dumpfreq} "${net_force}" file ${outdir}/netforce.out screen no
 
 compute bondlen all bond/local dist
 compute btype all property/local btype

@@ -10,7 +10,7 @@ stretch_force=0.0 # must be decimal values.
 seed="54654651 54654653 54654659 54654661 54654685"
 k_r_arr=$(seq 1 5 31 | xargs -n1 printf "%.1f\n")
 k_theta=7.785
-k_r=4.1535
+k_r=21.935
 
 #=======================================
 

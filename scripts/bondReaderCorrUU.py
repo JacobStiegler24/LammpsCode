@@ -37,7 +37,8 @@ def readfile():
     print(os.getcwd())
     os.chdir('..')
     print(os.getcwd())
-    path = os.path.join(os.getcwd(), r'Fibrin-Monomer\output\CORRuu')
+    path = os.path.join(os.getcwd(), r'\output\CORRuu')
+    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\CORRuu'
     os.chdir(path)
     print(os.getcwd())
 
@@ -105,7 +106,7 @@ def readfile():
         row = {
             "seed": seed,
 
-            "K_r phys": k_r_lmmps*2,
+            "K_r phys": k_r_lmmps,
 
             "types": np.array(btype_lst, dtype=int),
 
@@ -255,13 +256,13 @@ def main():
 
     r = np.array([Zr_bond(i, spring_const_vals['K_r phys'].iloc[ri1]) for i in x])
     Z, err = integrate.quad(Zr_bond, 0, 2, args=spring_const_vals['K_r phys'].iloc[ri1])
-    plt.hist(data_df[data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri1]]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj')
-    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj theory')
+    plt.hist(data_df[data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri1]]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f"k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj")
+    plt.plot(x, r/Z, label=f"k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj theory")
 
     r = np.array([Zr_bond(i, spring_const_vals['K_r phys'].iloc[ri2]) for i in x])
     Z, err = integrate.quad(Zr_bond, 0, 2, args=spring_const_vals['K_r phys'].iloc[ri2])
-    plt.hist(data_df[data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri2]]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj')
-    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj theory')
+    plt.hist(data_df[data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri2]]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f"k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj")
+    plt.plot(x, r/Z, label=f"k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj theory")
     plt.xlabel('Bond length (lj)')
     plt.ylabel('Frequency')
     plt.legend()

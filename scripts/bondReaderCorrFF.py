@@ -36,6 +36,7 @@ def readfile():
     os.chdir('..')
     print(os.getcwd())
     path = os.path.join(os.getcwd(), r'Fibrin-Monomer\output\CORRff')
+    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\CORRff'
     os.chdir(path)
     print(os.getcwd())
 
@@ -305,7 +306,7 @@ def main():
     plt.figure(1)
     fig, ax = plt.subplots()
     ax.set_box_aspect(2/3)
-    plt.plot(x, y, label='theory std/length')
+    plt.plot(x, y, label='theory std/<r>')
     plt.scatter(
         monomer_df['K_r'],
         monomer_df['monomer length std']/monomer_df['monomer length mean'],
@@ -325,8 +326,8 @@ def main():
         elinewidth=0.3
     )
     plt.xlabel('K_r')
-    plt.ylabel('Monomer length std / 2r_0 (lj)')
-    plt.title('std of monomer length coloured by K_theta')
+    plt.ylabel('Monomer length (R) std / <R> (lj)')
+    plt.title('Monomer length fluctuation')
     plt.legend()
     plt.savefig('std_vs_K_r.eps', bbox_inches='tight')
    
@@ -371,18 +372,18 @@ def main():
     plt.figure(3)
     fig, ax = plt.subplots()
     ax.set_box_aspect(2/3)
-    plt.title(f'Single bond length histogram at k_theta = {spring_const_vals['K_theta phys'].iloc[ti1]} lj. \nTimestep=0.001, Count=800000, 5 seeds')
+    plt.title(f'Single bond length histogram at k_theta = {spring_const_vals["K_theta phys"].iloc[ti1]} lj. \nTimestep=0.001, Count=800000, 5 seeds')
     x = np.linspace(0,4,200)
 
     r = np.array([Zr_bond(i, spring_const_vals['K_r phys'].iloc[ri1]) for i in x])
     Z, err = integrate.quad(Zr_bond, 0, np.inf, args=spring_const_vals['K_r phys'].iloc[ri1])
-    plt.hist(data_df[(data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri1]) & (data_df['K_theta phys'] == spring_const_vals['K_theta phys'].iloc[ti1])]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj')
-    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj theory')
+    plt.hist(data_df[(data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri1]) & (data_df['K_theta phys'] == spring_const_vals['K_theta phys'].iloc[ti1])]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals["K_r phys"].iloc[ri1]} lj')
+    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals["K_r phys"].iloc[ri1]} lj theory')
 
     r = np.array([Zr_bond(i, spring_const_vals['K_r phys'].iloc[ri2]) for i in x])
     Z, err = integrate.quad(Zr_bond, 0, np.inf, args=spring_const_vals['K_r phys'].iloc[ri2])
-    plt.hist(data_df[(data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri2]) & (data_df['K_theta phys'] == spring_const_vals['K_theta phys'].iloc[ti1])]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj')
-    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals['K_r phys'].iloc[ri2]} lj theory')
+    plt.hist(data_df[(data_df['K_r phys'] == spring_const_vals['K_r phys'].iloc[ri2]) & (data_df['K_theta phys'] == spring_const_vals['K_theta phys'].iloc[ti1])]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label=f'k_r = {spring_const_vals["K_r phys"].iloc[ri2]} lj')
+    plt.plot(x, r/Z, label=f'k_r = {spring_const_vals["K_r phys"].iloc[ri2]} lj theory')
     plt.xlabel('Bond length (lj)')
     plt.ylabel('Frequency')
     plt.legend()
@@ -392,18 +393,18 @@ def main():
     plt.figure(4)
     fig, ax = plt.subplots()
     ax.set_box_aspect(2/3)
-    plt.title(f'Monomer angle histogram at k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj. \nTimestep=0.001, Count=800000, 5 seeds')
+    plt.title(f"Monomer angle histogram at k_r = {spring_const_vals['K_r phys'].iloc[ri1]} lj. \nTimestep=0.001, Count=800000, 5 seeds")
     x = np.linspace(0,np.pi,200)
 
     r = np.array([ZTheta(i, spring_const_vals['K_theta phys'].iloc[ti1]) for i in x])
     Z, err = integrate.quad(ZTheta, 0, np.pi, args=spring_const_vals['K_theta phys'].iloc[ti1])
-    plt.hist(monomer_df[(monomer_df['K_r'] == spring_const_vals['K_r phys'].iloc[ri1]) & (monomer_df['K_theta'] == spring_const_vals['K_theta phys'].iloc[ti1])]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label=f'k_theta = {spring_const_vals['K_theta phys'].iloc[ti1]} lj')
-    plt.plot(x, r/Z, label=f'k_theta = {spring_const_vals['K_theta phys'].iloc[ri1]} lj theory')
+    plt.hist(monomer_df[(monomer_df['K_r'] == spring_const_vals['K_r phys'].iloc[ri1]) & (monomer_df['K_theta'] == spring_const_vals['K_theta phys'].iloc[ti1])]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label=f'k_theta = {spring_const_vals["K_theta phys"].iloc[ti1]} lj')
+    plt.plot(x, r/Z, label=f'k_theta = {spring_const_vals["K_theta phys"].iloc[ri1]} lj theory')
 
     r = np.array([ZTheta(i, spring_const_vals['K_theta phys'].iloc[ti2]) for i in x])
     Z, err = integrate.quad(ZTheta, 0, np.pi, args=spring_const_vals['K_theta phys'].iloc[ti2])
-    plt.hist(monomer_df[(monomer_df['K_r'] == spring_const_vals['K_r phys'].iloc[ri1]) & (monomer_df['K_theta'] == spring_const_vals['K_theta phys'].iloc[ti2])]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label=f'k_theta = {spring_const_vals['K_theta phys'].iloc[ti2]} lj')
-    plt.plot(x, r/Z, label=f'k_theta = {spring_const_vals['K_theta phys'].iloc[ti2]} lj theory')
+    plt.hist(monomer_df[(monomer_df['K_r'] == spring_const_vals['K_r phys'].iloc[ri1]) & (monomer_df['K_theta'] == spring_const_vals['K_theta phys'].iloc[ti2])]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label=f'k_theta = {spring_const_vals["K_theta phys"].iloc[ti2]} lj')
+    plt.plot(x, r/Z, label=f'k_theta = {spring_const_vals["K_theta phys"].iloc[ti2]} lj theory')
 
     plt.xlabel('Monomer angle (rad)')
     plt.ylabel('Frequency')
