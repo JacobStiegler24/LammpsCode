@@ -34,6 +34,7 @@ def readfile():
     # Change directory to the project folder
     print(os.getcwd())
     path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
+    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceSeed'
     os.chdir(path)
     print(os.getcwd())
 
@@ -335,9 +336,9 @@ def main():
         mean_extension, extension_std, extension_sem, mean_angle, angle_std, angle_sem, FU_fraction, UU_fraction, FU_mean_duration, FU_mean_duration_std, \
         FU_mean_duration_se, UU_mean_duration, UU_mean_duration_std, UU_mean_duration_se, \
         K_eq_FU, K_eq_UU \
-        = compute(data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'types'].iloc[0], \
-                data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'lengths'].iloc[0], \
-                    data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed), 'angle'].iloc[0]
+        = compute(data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed)]['types'].iloc[0], \
+                data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed)]['lengths'].iloc[0], \
+                    data_df.loc[(data_df['force'] == force) & (data_df['seed'] == seed)]['angle'].iloc[0]
                 )
 
         row = {

@@ -101,12 +101,14 @@ def main():
     x = np.linspace(1, 100, 10000)
     t = np.linspace(1, 100, 10000)
     R_var = np.array([VarR(i) for i in x])
+    R_exp = np.array([ExpectedR(i) for i in x])
+
     Theta_exp = np.array([ExpectedTheta(i) for i in t])[:,0]
 
-    R_var_ratio = R_var/2
+    R_var_ratio = np.sqrt(R_var)/R_exp
     Theta_exp_ratio = (np.pi-Theta_exp)/np.pi
 
-    Delta_R = np.abs(R_var_ratio - 0.1)
+    Delta_R = np.abs(R_var_ratio-0.1)
     Delta_Theta = np.abs(Theta_exp_ratio - 0.1)
 
     print(f'Best k_r = {x[Delta_R.argmin()]}')

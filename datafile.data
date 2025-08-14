@@ -33,7 +33,7 @@ Pair Coeffs # lj/cut
 
 Angle Coeffs # harmonic
 
-1 1 180
+1 7.785 180
 
 Atoms # angle
 

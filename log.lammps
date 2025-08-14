@@ -7,21 +7,26 @@ OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:99
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
-# variable K_r equal 4.1535
-# variable K_r_prime equal 10
+# variable K_r equal 22
+# variable K_r_prime equal 50
 variable R0 equal 1
 variable R0_prime equal 2
-# variable K_theta equal 7.785
-# variable stretch_force equal 10.0
-variable unfold_critical_distance equal 1.25
-variable fold_critical_distance equal 1
+# variable K_theta equal 2.3
+
+variable unfold_critical_distance equal 1.5
+variable fold_critical_distance equal 0.5
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 1000000
-variable time_step equal 0.0001   # time step in picoseconds
+variable run_no equal 10000000
+variable time_step equal 0.000001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
 variable dumpfreq equal 100
+
+variable stretch_velocity equal 1.975*${R0_prime}/(${time_step}*${run_no})  # stretch velocity in nm/ps
+variable stretch_velocity equal 1.975*2/(${time_step}*${run_no})  
+variable stretch_velocity equal 1.975*2/(1e-06*${run_no})  
+variable stretch_velocity equal 1.975*2/(1e-06*10000000)  
 #########################################################################################
 
 units lj                # Lennard-Jones units
@@ -66,8 +71,10 @@ group reaction_group id 1
 1 atoms in group reaction_group
 group extension_group id 3
 1 atoms in group extension_group
-group motion_group id 2 3
-2 atoms in group motion_group
+group motion_group id 2
+1 atoms in group motion_group
+group measure_group id 1 2
+2 atoms in group measure_group
 group rxn-group type D E
 3 atoms in group rxn-group
 
@@ -76,15 +83,11 @@ pair_coeff * * 0.0 0.0
 
 bond_style hybrid harmonic fene         # harmonic bond
 bond_coeff 1 harmonic ${K_r} ${R0}     # args: bond type, bond style, K, R0
-bond_coeff 1 harmonic 4.1535 ${R0}     
-bond_coeff 1 harmonic 4.1535 1     
+bond_coeff 1 harmonic 21.935 ${R0}     
+bond_coeff 1 harmonic 21.935 1     
 bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 1.0     # args: bond type, bond style, K, R0, epsilon, sigma
-bond_coeff 2 fene 31.0 ${R0_prime} 0.0 1.0     
-bond_coeff 2 fene 31.0 2 0.0 1.0     
-
-# bond_style harmonic       # harmonic bond
-# bond_coeff 1 ${K_r} ${R0}
-# bond_coeff 2 ${K_r_prime} ${R0_prime}
+bond_coeff 2 fene 21.935 ${R0_prime} 0.0 1.0     
+bond_coeff 2 fene 21.935 2 0.0 1.0     
 
 angle_style harmonic             # harmonic bond angular component
 angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
@@ -97,10 +100,8 @@ fix 2 motion_group langevin 1 ${temp} 1.0 ${seed}
 fix 2 motion_group langevin 1 1 1.0 ${seed}  
 fix 2 motion_group langevin 1 1 1.0 54654685  
 
-# variable fz equal ramp(0,${stretch_force})
-# fix extension_force extension_group addforce 0.0 0.0 v_fz
-fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
-fix extension_force extension_group addforce 0.0 0.0 0.0
+fix extension_force extension_group move linear 0.0 0.0 ${stretch_velocity}
+fix extension_force extension_group move linear 0.0 0.0 0.395
 
 ############################################################################################
 # chatgpt, explain the terms
@@ -108,26 +109,35 @@ fix extension_force extension_group addforce 0.0 0.0 0.0
 ############################################################################################
 
 timestep ${time_step}                        # time step in picoseconds
-timestep 0.0001                        
+timestep 1e-06                        
 
 ############################################################################################
 # Print to file commands
+compute fx measure_group reduce sum fx
+compute fy measure_group reduce sum fy
+compute fz measure_group reduce sum fz
+variable net_force equal c_fz # sqrt(c_fx*c_fx+c_fy*c_fy+c_fz*c_fz)
+fix myNetforce all print ${dumpfreq} "${net_force}" file ${outdir}/netforce.out screen no
+fix myNetforce all print 100 "${net_force}" file ${outdir}/netforce.out screen no
+fix myNetforce all print 100 "${net_force}" file output/ForceExtension/Force-ExtensionSeed54654685/netforce.out screen no
+
 compute bondlen all bond/local dist
 compute btype all property/local btype
-dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump extension_group local 100 ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump extension_group local 100 output/CORRuu/k_r_prime31.0_Seed54654685/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump all local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump all local 100 ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump all local 100 output/ForceExtension/Force-ExtensionSeed54654685/bondlengths.dump c_btype c_bondlen
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
 dump angle_dump all local 100 ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 100 output/CORRuu/k_r_prime31.0_Seed54654685/angles.dump c_myAngle
+dump angle_dump all local 100 output/ForceExtension/Force-ExtensionSeed54654685/angles.dump c_myAngle
+shell mv angles.dump output
+WARNING: Shell command 'mv angles.dump output' returned with non-zero status (src/input.cpp:1268)
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
 dump dum1 all custom 100 ${outdir}/dum1.dump id type x y z ix iy iz 
-dump dum1 all custom 100 output/CORRuu/k_r_prime31.0_Seed54654685/dum1.dump id type x y z ix iy iz 
-write_data ${outdir}/datafile.data
-write_data output/CORRuu/k_r_prime31.0_Seed54654685/datafile.data
+dump dum1 all custom 100 output/ForceExtension/Force-ExtensionSeed54654685/dum1.dump id type x y z ix iy iz 
+write_data datafile.data
 System init for write_data ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
@@ -144,37 +154,67 @@ Neighbor list info ...
       stencil: half/bin/3d
       bin: standard
 WARNING: Not all mixed pair coeffs generated from mixing. Use write_data with 'pair ij' option to store all pair coeffs. (src/write_data.cpp:364)
-
-# group D1 id 1
-# group D2 id 3
-# group E id 2
-
-# compute cD1 D1 com
-# compute cD2 D2 com
-# compute cE  E  com
-
-
-# variable dx1 equal c_cD1[1]-c_cE[1]
-# variable dy1 equal c_cD1[2]-c_cE[2]
-# variable dz1 equal c_cD1[3]-c_cE[3]
-# variable dx2 equal c_cD2[1]-c_cE[1]
-# variable dy2 equal c_cD2[2]-c_cE[2]
-# variable dz2 equal c_cD2[3]-c_cE[3]
-# variable RE equal sqrt(v_dx1*v_dx1+v_dy1*v_dy1+v_dz1*v_dz1) #+ sqrt(v_dx2*v_dx2+v_dy2*v_dy2+v_dz2*v_dz2)
-
-# fix myRG2file all print 100 "${RE}  "  file ${outdir}/bond_length.out screen no
 ############################################################################################
 
 ############################################################################################
 # Molecule change for unfolding/folding
 
-# molecule folded m_folded.txt
-# molecule unfolded m_unfolded.txt
-# molecule D1E2D m_D1E2D.txt
-# molecule D2E1D m_D2E1D.txt
+molecule folded m_folded.txt
+Read molecule template folded:
+folded
+  1 molecules
+  0 fragments
+  3 atoms with max type 2
+  2 bonds with max type 1
+  1 angles with max type 1
+  0 dihedrals with max type 0
+  0 impropers with max type 0
+molecule unfolded m_unfolded.txt
+Read molecule template unfolded:
+unfolded
+  1 molecules
+  0 fragments
+  3 atoms with max type 2
+  2 bonds with max type 2
+  1 angles with max type 1
+  0 dihedrals with max type 0
+  0 impropers with max type 0
+molecule D1E2D m_D1E2D.txt
+Read molecule template D1E2D:
+unfoldedED
+  1 molecules
+  0 fragments
+  3 atoms with max type 2
+  2 bonds with max type 2
+  1 angles with max type 1
+  0 dihedrals with max type 0
+  0 impropers with max type 0
+molecule D2E1D m_D2E1D.txt
+Read molecule template D2E1D:
+unfoldedDE
+  1 molecules
+  0 fragments
+  3 atoms with max type 2
+  2 bonds with max type 2
+  1 angles with max type 1
+  0 dihedrals with max type 0
+  0 impropers with max type 0
 
-# # test without unfolding for angular bond
-# fix rxn1 all bond/react #   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} #   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} #   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} #   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} ##   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} #   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} #   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} #   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+# test without unfolding for angular bond
+fix rxn1 all bond/react   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded mapED.txt prob 0.5 ${seed} 
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded mapED.txt prob 0.5 54654685 
+dynamic group bond_react_MASTER_group defined
 
 
 # molecule fold m_fold.txt
@@ -185,7 +225,7 @@ WARNING: Not all mixed pair coeffs generated from mixing. Use write_data with 'p
 ############################################################################################
 
 run ${run_no}
-run 1000000
+run 10000000
 
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
@@ -203,29 +243,173 @@ Your simulation uses code contributions which should be cited:
  pages =   {3282–-3297}
 }
 
+- fix bond/react: reacter.org doi:10.1016/j.polymer.2017.09.038, doi:10.1021/acs.macromol.0c02012, doi:10.1016/j.cpc.2024.109287
+
+@Article{Gissinger17,
+ author = {J. R. Gissinger and B. D. Jensen and K. E. Wise},
+ title = {Modeling Chemical Reactions in Classical Molecular Dynamics Simulations},
+ journal = {Polymer},
+ year =    2017,
+ volume =  128,
+ pages =   {211--217}
+}
+
+@Article{Gissinger20,
+ author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},
+ title = {{REACTER}: A Heuristic Method for Reactive Molecular Dynamics},
+ journal = {Macromolecules},
+ year =    2020,
+ volume =  53,
+ number =  22,
+ pages =   {9953--9961}
+}
+
+@Article{Gissinger24,
+ author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},
+ title = {Molecular Modeling of Reactive Systems with REACTER},
+ journal = {Computer Physics Communications},
+ year =    2024,
+ volume =  304,
+ number =  109287
+}
+
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
-Per MPI rank memory allocation (min/avg/max) = 5.573 | 5.573 | 5.573 Mbytes
+Neighbor list info ...
+  update: every = 1 steps, delay = 1 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11.9
+  ghost atom cutoff = 11.9
+  binsize = 5.95, bins = 17 17 169
+  2 neighbor lists, perpetual/occasional/extra = 1 1 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d
+      bin: standard
+  (2) fix bond/react, occasional, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 6.261 | 6.261 | 6.261 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
-         0   0              0              11.890859      11.890859     -2.7555556e-06
-   1000000   0.23026969     0              1.9383759      2.1686456     -3.4086405e-07
-Loop time of 0.776518 on 1 procs for 1000000 steps with 3 atoms
+         0   0              0              0              0              0            
+WARNING: FENE bond too long: 4452227 1 2 1.8973690874756006 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452228 1 2 1.89737170105969 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452229 1 2 1.8973743138274548 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452230 1 2 1.8973769288026943 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452231 1 2 1.897379544806319 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452232 1 2 1.8973821605478478 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452233 1 2 1.8973847782867694 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452234 1 2 1.8973873982346647 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452235 1 2 1.8973900191363027 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452236 1 2 1.8973926400132883 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452237 1 2 1.8973952620157246 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452238 1 2 1.8973978856033502 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452239 1 2 1.8974005080029193 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452240 1 2 1.8974031274465963 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452241 1 2 1.8974057466871654 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452242 1 2 1.8974083634793992 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452243 1 2 1.8974109771071024 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452244 1 2 1.8974135883570573 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452245 1 2 1.8974161964954133 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452246 1 2 1.8974188068958138 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452247 1 2 1.897421416641893 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452248 1 2 1.8974240272431728 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452249 1 2 1.8974266400096098 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452250 1 2 1.8974292507140684 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452251 1 2 1.8974318611599001 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452252 1 2 1.8974344736160837 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452253 1 2 1.8974370881130007 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452254 1 2 1.897439702399403 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452255 1 2 1.897442316498459 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452256 1 2 1.89744493212056 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452257 1 2 1.8974475486339986 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452258 1 2 1.897450165249546 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452259 1 2 1.8974527824403364 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452260 1 2 1.8974553975151858 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452261 1 2 1.897458011231058 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452262 1 2 1.8974606236405511 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452263 1 2 1.8974632325541325 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452264 1 2 1.8974658408067635 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452265 1 2 1.897468446927313 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452266 1 2 1.8974710521895377 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452267 1 2 1.8974736591147525 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452268 1 2 1.8974762675133114 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452269 1 2 1.8974788736691008 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452270 1 2 1.897481477785506 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452271 1 2 1.8974840802791462 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452272 1 2 1.8974866795667076 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452273 1 2 1.8974892788675026 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452274 1 2 1.8974918750214964 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452275 1 2 1.8974944732902024 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452276 1 2 1.8974970701165774 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452277 1 2 1.8974996664430028 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452278 1 2 1.8975022607502465 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452279 1 2 1.8975048539943233 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452280 1 2 1.8975074437480663 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452281 1 2 1.8975100346257698 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452282 1 2 1.8975126222189893 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452283 1 2 1.897515208466669 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452284 1 2 1.8975177944447705 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452285 1 2 1.8975203813470385 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452286 1 2 1.8975229704075227 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452287 1 2 1.8975255616461255 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452288 1 2 1.89752815129423 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452289 1 2 1.8975307382692075 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452290 1 2 1.8975333261061147 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452291 1 2 1.8975359129082006 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452292 1 2 1.8975384971628266 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452293 1 2 1.8975410801940087 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452294 1 2 1.8975436630801343 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452295 1 2 1.8975462468938447 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452296 1 2 1.8975488293048377 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452297 1 2 1.8975514137956782 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452298 1 2 1.8975539950182816 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452299 1 2 1.897556575668113 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452300 1 2 1.8975591528801943 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452301 1 2 1.8975617288395366 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452302 1 2 1.8975643013029082 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452303 1 2 1.8975668706083346 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452304 1 2 1.8975694386506634 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452305 1 2 1.8975720052662246 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452306 1 2 1.8975745724199358 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452307 1 2 1.8975771391060925 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452308 1 2 1.8975797031575472 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452309 1 2 1.8975822679071785 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452310 1 2 1.8975848310240129 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452311 1 2 1.8975873926686566 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452312 1 2 1.8975899522423603 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452313 1 2 1.897592510924284 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452314 1 2 1.8975950700309372 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452315 1 2 1.8975976309187288 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452316 1 2 1.8976001889136798 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452317 1 2 1.8976027486736318 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452318 1 2 1.8976053080932793 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452319 1 2 1.8976078695337353 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452320 1 2 1.8976104302127224 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452321 1 2 1.897612988995541 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 4452322 1 2 1.8976155486131485 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: Too many warnings: 7637572 vs 100. All future warnings will be suppressed (src/thermo.cpp:495)
+  10000000   4.4607116      0              61.680717      66.141429     -7.3114491e-05
+Loop time of 44.845 on 1 procs for 10000000 steps with 3 atoms
 
-Performance: 11126596.182 tau/day, 1287800.484 timesteps/s, 3.863 Matom-step/s
-93.8% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 19266.377 tau/day, 222990.474 timesteps/s, 668.971 katom-step/s
+98.8% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 0.037211   | 0.037211   | 0.037211   |   0.0 |  4.79
-Bond    | 0.14483    | 0.14483    | 0.14483    |   0.0 | 18.65
-Neigh   | 0.0023134  | 0.0023134  | 0.0023134  |   0.0 |  0.30
-Comm    | 0.16799    | 0.16799    | 0.16799    |   0.0 | 21.63
-Output  | 0.10207    | 0.10207    | 0.10207    |   0.0 | 13.14
-Modify  | 0.19424    | 0.19424    | 0.19424    |   0.0 | 25.01
-Other   |            | 0.1279     |            |       | 16.47
+Pair    | 0.5135     | 0.5135     | 0.5135     |   0.0 |  1.15
+Bond    | 4.1246     | 4.1246     | 4.1246     |   0.0 |  9.20
+Neigh   | 10.513     | 10.513     | 10.513     |   0.0 | 23.44
+Comm    | 2.3998     | 2.3998     | 2.3998     |   0.0 |  5.35
+Output  | 1.3934     | 1.3934     | 1.3934     |   0.0 |  3.11
+Modify  | 24.409     | 24.409     | 24.409     |   0.0 | 54.43
+Other   |            | 1.491      |            |       |  3.33
 
 Nlocal:              3 ave           3 max           3 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
@@ -237,7 +421,7 @@ Histogram: 1 0 0 0 0 0 0 0 0 0
 Total # of neighbors = 0
 Ave neighs/atom = 0
 Ave special neighs/atom = 2
-Neighbor list builds = 56
+Neighbor list builds = 248021
 Dangerous builds = 0
 
 # unfix extension_force
@@ -247,10 +431,9 @@ Dangerous builds = 0
 write_restart final.restart
 System init for write_restart ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
-WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
 
 # statistics
 # file structure
 # angular potential
 # folding/unfolding efficiency
-Total wall time: 0:00:00
+Total wall time: 0:00:44
