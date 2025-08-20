@@ -1,218 +1,355 @@
-#!/usr/bin/env python3
-"""
-Analyze a single bond from bondlengths.dump:
-- Verify bond types (no unfolding) by counting type==2.
-- Overlay BOTH:
-    (1) Exact normalized single-bond PDF: p(r)=r^2 exp[-alpha(r-R0)^2]/Z, alpha=k_phys/(2T)
-    (2) Gaussian surrogate used in your gnuplot:
-        k_r = 2*K_r_lmp, R0=1, mu = ((3*R0/k_r)+R0**3)/((1/k_r)+R0**2), sigma = sqrt(1/k_r)
-
-Saves: histogram_overlays.png
-"""
-
-import os, re
+print('start')
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import integrate, optimize
+import pandas as pd
+import re as re
+from scipy import constants
+from scipy import integrate
+from math import floor, log10
+print('imported')
 
-# -------------------- user knobs --------------------
-T_LJ = 1.0
-R0   = 1.0
+# Point of script:
+# One/two bond unfolded fractions
+# Mean time one/two unfolded + std/se
+# Free energy + standard error
 
-# Choose which bond to analyze from the 2xT dump (0 or 1)
-BOND_IDX = 1
+# Constants
+timestep = 0.00001 # lj
+nevery = 100 # how often data is dumped
+indextime = timestep * nevery # time between each data point in picoseconds
 
-# Requested LAMMPS knobs; we’ll snap to nearest present in CORR/
-REQ_K_LMP      = 22.0
-REQ_KTHETA_LMP = 1.0
+sigma = 22.5E-9 # m
+epsilon = 2.25E-20 # J
+mass = 2.12E-22 # kg
+F_LJ = (epsilon/sigma) # N
+T_LJ = 1.0 #18.4
+Temp = T_LJ*epsilon/constants.Boltzmann # K
+tau = (sigma)*np.sqrt(mass/epsilon) # s
 
-# Histogram look (to compare with gnuplot)
-BIN_WIDTH = 0.005
-XRANGE    = (0.0, 2.0)
+k_theta = 7.785
+k_r = 21.935*2
+k_r_prime = 3
+r_0 = 2
 
-# Run location: run this from scripts/, go up once to repo root
-ROOT_STEP_UP = 1
+print(f'sigma: {sigma} nm, epsilon: {epsilon} J, mass: {mass} kg, tau: {tau} s,') 
+print(f'F: {F_LJ} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}')
+print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 
-OUT_FIG  = "histogram_overlays.png"
+def readfile():
+    # Change directory to the project folder
+    print(f'current dir: {os.getcwd()}')
+    currentdir = os.getcwd()
+    path = os.path.join(currentdir, r'output')
+    # path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\CORRuu'
+    os.chdir(path)
+    print(os.getcwd())
 
-# -------------------- helpers --------------------
-def project_corr_path():
-    path = os.getcwd()
-    for _ in range(ROOT_STEP_UP):
-        path = os.path.dirname(path)
-    return os.path.join(path, "Fibrin-Monomer", "output", "CORR")
+    folder_lst = sorted(os.listdir())
+    rows = []
 
-def nearest(arr, val):
-    arr = np.asarray(arr, float)
-    return arr[np.argmin(np.abs(arr - val))]
+    folder_num = len(folder_lst)
+    counter = 1
+    
+    for folder in folder_lst:
+        # https://docs.python.org/3/library/re.html
+        # https://docs.python.org/3/howto/regex.html#regex-howto
+        # output/k_r${k_r}_k_theta${k_theta}
+        seed_match = re.search(r'Seed(\d+)?', folder)
+        r_match = re.search(r'Force(\d+(?:\.\d+)?)', folder)
 
-# Exact model pieces
-def Z_alpha(alpha, r0=R0):
-    return integrate.quad(lambda x: x**2*np.exp(-alpha*(x-r0)**2), 0, np.inf, limit=500)[0]
-
-def pdf_single_exact(r, k_phys, T=T_LJ, r0=R0):
-    a = k_phys/(2*T)
-    Z = Z_alpha(a, r0)
-    return (r**2)*np.exp(-a*(r-r0)**2)/Z
-
-def fit_alpha_mle(data, r0=R0, T=T_LJ):
-    d = np.asarray(data, float)
-    d = d[np.isfinite(d) & (d > 0)]
-    if d.size < 50:
-        raise RuntimeError("Not enough valid samples to fit alpha (need ~50+).")
-    def nll(a):
-        if a <= 0: return np.inf
-        Z = Z_alpha(a, r0)
-        return -(2*np.log(d) - a*(d-r0)**2 - np.log(Z)).sum()
-    res = optimize.minimize_scalar(nll, bounds=(1e-6, 1e5), method='bounded')
-    return float(res.x)
-
-# Gaussian surrogate (gnuplot)
-def gaussian_params_from_Kr_lmp(K_r_lmp, R0=R0):
-    k_r = 2.0 * K_r_lmp
-    mu  = ((3.0*R0/k_r) + R0**3) / ((1.0/k_r) + R0**2)
-    sigma = np.sqrt(1.0/k_r)
-    return mu, sigma, k_r
-
-def gaussian_pdf(x, mu, sigma):
-    return (1.0/np.sqrt(2.0*np.pi)/sigma) * np.exp(-0.5*((x-mu)/sigma)**2)
-
-# -------------------- I/O --------------------
-def scan_index(corr_path):
-    recs = []
-    for folder in sorted(os.listdir(corr_path)):
-        m_seed = re.search(r'Seed(\d+)', folder)
-        m_Kr   = re.search(r'k_r(\d+(?:\.\d+)?)', folder)
-        m_Kt   = re.search(r'k_theta(\d+(?:\.\d+)?)', folder)
-        if not (m_seed and m_Kr and m_Kt):
+        if not (r_match and seed_match):
             continue
-        recs.append({
-            "folder": folder,
-            "seed": int(m_seed.group(1)),
-            "K_r_lmp": float(m_Kr.group(1)),
-            "K_t_lmp": float(m_Kt.group(1)),
-        })
-    if not recs:
-        raise RuntimeError("No matching folders under CORR/")
-    return recs
+        
+        seed = int(seed_match.group(1))
+        force = float(r_match.group(1))
 
-def pick_folder(corr_path, req_kr_lmp, req_kt_lmp):
-    recs = scan_index(corr_path)
-    kr_vals = sorted(set(r["K_r_lmp"] for r in recs))
-    kt_vals = sorted(set(r["K_t_lmp"] for r in recs))
-    kr_sel  = nearest(kr_vals, req_kr_lmp)
-    kt_sel  = nearest(kt_vals, req_kt_lmp)
-    cand = [r for r in recs if np.isclose(r["K_r_lmp"], kr_sel) and np.isclose(r["K_t_lmp"], kt_sel)]
-    if not cand:
-        raise RuntimeError("No folder matches selection.")
-    sel = cand[0]
-    return os.path.join(corr_path, sel["folder"]), sel
+        folder_path = os.path.join(os.getcwd(), folder)
+        os.chdir(folder_path)
 
-def read_dump_types_and_lengths(path_dump):
-    """
-    Returns: types (2,T) int, lengths (2,T) float
-    Assumes each 'ITEM: ENTRIES c_btype c_bondlen' block has exactly two lines (two bonds).
-    """
-    types = [[], []]
-    blen  = [[], []]
-    with open(path_dump) as f:
-        in_block = False
-        got = 0
-        for line in f:
-            if 'ITEM: ENTRIES c_btype c_bondlen' in line:
-                in_block = True; got = 0
-                continue
-            if not in_block:
-                continue
-            if got == 2:
-                in_block = False; got = 0
-                continue
-            toks = line.split()
-            if len(toks) < 2:
-                continue
-            try:
-                t = int(toks[0]); d = float(toks[1])
-            except ValueError:
-                continue
-            types[got].append(t)
-            blen[got].append(d)
-            got += 1
-    t_arr = np.array(types, dtype=int)
-    r_arr = np.array(blen,  dtype=float)
-    if r_arr.size == 0:
-        raise RuntimeError(f"No bond data parsed from {path_dump}")
-    return t_arr, r_arr
+        btype_lst = [[],[]]
+        blen_lst = [[],[]]
+        with open('bondlengths.dump') as f:
+            isItem = False
+            counter2 = 0
+            for line in f:
+                if 'ENTRIES c_btype c_bondlen' in line:
+                    isItem = True
+                    counter2 = 0
+                    continue
+                if not isItem:
+                    continue
+                if counter2 == 2:
+                    isItem = False
+                    counter2 = 0
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    btype_lst[counter2].append(int(parts[0]))
+                    blen_lst[counter2].append(float(parts[1]))
+                counter2 += 1
+                
+        # bangle_lst = []
+        # with open('angles.dump') as f:
+        #     isItem = False
+        #     for line in f:
+        #         if 'ITEM: ENTRIES c_myAngle' in line:
+        #             isItem = True
+        #             continue
+        #         if isItem:
+        #             try:
+        #                 bangle_lst.append(float(line.strip()))
+        #             except ValueError:
+        #                 pass
+        #             isItem = False
+                
 
-# -------------------- main --------------------
+        mlen_arr = np.array(blen_lst, dtype=np.float64)[0, :] + np.array(blen_lst, dtype=np.float64)[1, :]
+        blen_arr = np.array(blen_lst, dtype=float) 
+        row = {
+            "force": force,
+            "seed": seed,
+
+            "types": np.array(btype_lst, dtype=int),
+
+            "bond lengths": blen_arr,       
+            "monomer lengths": mlen_arr,       
+
+            # "angle_deg": np.array(bangle_lst, dtype=float),
+        }
+        
+        rows.append(row)
+        os.chdir('..')
+        print(f'{counter}/{folder_num} folders read')
+        counter += 1
+
+    df = pd.DataFrame(rows)
+
+    print(df)
+
+    df1 = df.groupby(['force']).agg({
+        'monomer lengths':       lambda s: np.concatenate(s.to_numpy()),
+        # 'angle_deg':     lambda s: np.concatenate(s.to_numpy()),
+        'types':         lambda s: np.concatenate([np.asarray(x, float) for x in s], axis=1),
+        'bond lengths':  lambda s: np.concatenate([np.asarray(x, float) for x in s], axis=1),
+        'monomer lengths': lambda s: np.concatenate([np.asarray(x, float) for x in s])
+    }).reset_index()
+    return df1
+
+
+
+def round_sig(x, sig=2):
+    # https://stackoverflow.com/a/3413529
+    return round(x, sig-int(floor(log10(abs(x))))-1)
+
+def Zr_bond(r, k, F=0, Unfold = False):
+    alpha = (r*F)/(T_LJ)
+    
+    if Unfold:
+        if F != 0:
+            if alpha < 1E-6:
+                exponent = (2*k/T_LJ)*np.log(1-r**2/4)+np.log(2*np.pi)+alpha**2/6+alpha**4/120
+                integrand = r**2*np.exp(exponent)
+            elif alpha < 50:
+                exponent = (2*k/T_LJ)*np.log(1-r**2/4)+np.log(2*np.pi)+np.log(np.sinh(alpha))-np.log(alpha)
+                integrand = r**2*np.exp(exponent)
+            else:
+                exponent = (2*k/T_LJ)*np.log(1-r**2/4)+np.log(2*np.pi)+alpha-np.log(2*alpha)
+                integrand = r**2*np.exp(exponent)
+            
+        else:
+            integrand = r**2*(((1-(r**2)/4)**(2*k/T_LJ)))
+    else: 
+        
+        if F != 0:
+            if alpha < 1E-6:
+                exponent = (-k_r/(2*T_LJ))*(r-1)**2 + np.log(2*np.pi)+alpha**2/6+alpha**4/120
+                integrand = r**2*np.exp(exponent)
+            elif alpha < 50:
+                exponent = (-k_r/(2*T_LJ))*(r-1)**2 + np.log(2*np.pi)+np.log(np.sinh(alpha))-np.log(alpha)
+                integrand = r**2*np.exp(exponent)
+            else:
+                exponent = (-k_r/(2*T_LJ))*(r-1)**2 + np.log(2*np.pi)+alpha-np.log(2*alpha)
+                integrand = r**2*np.exp(exponent)
+        else:
+            exponent = (-k_r/(2*T_LJ))*(r-1)**2
+            integrand = r**2*np.exp(exponent)
+    #integrand = r**2*np.exp(-U_eff(r,k,F))
+    return integrand
+
+def U_eff(r,k,F):
+    alpha = (r*F)/(2*T_LJ)
+    return -(2*k/T_LJ)*np.log(1-(r**2)/4)-np.log((2*np.pi*np.sinh(alpha)/alpha))
+
+def ExpectedRIntegral_bond(r, k, F, Unfold = False):
+    return Zr_bond(r,k,F,Unfold)*r
+
+def ExpectedRSqrIntegral_bond(r, k, F, Unfold = False):
+    return Zr_bond(r,k,F,Unfold)*r**2
+
+def ExpectedR(k,F,Unfold=False):
+    if Unfold:
+        Z, Zerr = integrate.quad(Zr_bond, 0, 2, args=(k,F,Unfold))
+        integral , err = integrate.quad(ExpectedRIntegral_bond, 0, 2, args=(k,F,Unfold))
+    else:
+        Z, Zerr = integrate.quad(Zr_bond, 0, np.inf, args=(k,F,Unfold))
+        integral , err = integrate.quad(ExpectedRIntegral_bond, 0, np.inf, args=(k,F,Unfold))
+    
+    invZ = 1/Z
+    expectedR_new = invZ*integral
+    # invZerr = Zerr/(Z**2)
+
+    
+    return expectedR_new
+
+def ExpectedRSqr(k,F,Unfold=False):
+    Z, Zerr = integrate.quad(Zr_bond, 0, 2, args=(k,F,Unfold))
+    invZ = 1/Z
+    # invZerr = Zerr/(Z**2)
+
+    integral1, err = integrate.quad(ExpectedRSqrIntegral_bond, 0, 2, args=(k,F,Unfold))
+    integral2, err = integrate.quad(ExpectedRIntegral_bond, 0, 2, args=(k,F,Unfold))
+    expectedR_sqr_new = invZ*integral1*2 + 2*(invZ*integral2)**2
+
+    return expectedR_sqr_new
+
+def VarR(k,F,Unfold=False):
+    
+    expectedR = ExpectedR(k,F,Unfold)
+    expectedRSqr = ExpectedRSqr(k,F,Unfold)
+
+    var = expectedRSqr-expectedR**2
+    return var
+
+def stats(data_df):
+    rt_pairs = data_df['force'].drop_duplicates().values
+    
+
+    std_mlen = []
+    sem_std_mlen = []
+    mean_mlen = []
+    sem_mlen = []
+
+    mean_blen = []
+
+    for force in rt_pairs:
+        try:
+            std_mlen.append(np.std(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))
+            sem_std_mlen.append((np.std(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[data_df['force'] == force]['monomer lengths'].iloc[0])))
+            
+            mean_mlen.append(np.mean(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))
+            sem_mlen.append((np.mean(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[data_df['force'] == force]['monomer lengths'].iloc[0])))
+            mean_blen.append(np.mean(np.array(data_df[data_df['force'] == force]['bond lengths'].iloc[0]), axis=1))
+
+        except ValueError as e:
+            print(f"Error calculating std for f={force}: {e}")
+            std_mlen.append(np.nan)
+            sem_std_mlen.append(np.nan)
+
+            mean_mlen.append(np.nan)
+            mean_mlen.append(np.nan)
+
+
+    monomer_df = pd.DataFrame({
+        "force": data_df['force'],
+
+        "monomer length mean": mean_mlen,
+        "monomer length sem": sem_mlen,
+        "monomer length std": std_mlen,
+        "monomer length std sem": sem_std_mlen,
+
+        "blen mean": mean_blen,
+
+        "lengths": data_df['monomer lengths'].values
+        # "angles": data_df['angle_deg'].values,
+    })
+    
+    return monomer_df 
+
+
 def main():
-    corr = project_corr_path()
-    print("Reading from:", corr)
+    data_df = readfile().sort_values('force')
+    monomer_df = stats(data_df).sort_values('force')
+    # F = np.linspace(0,700,1000)
+    # x_FF = np.array([ExpectedR(k_r,i,Unfold=False) for i in F])
+    # # x_FF = (F/k_r + 1)
+    # x_UU = np.array([ExpectedR(k_r_prime,i,Unfold=True) for i in F])
+    # # x_UU = 2*np.sqrt(1-np.exp(-F/(2*k_r_prime)))
+    # x_FU = x_FF + x_UU
 
-    folder_path, meta = pick_folder(corr, REQ_K_LMP, REQ_KTHETA_LMP)
-    print(f"[folder] {meta['folder']}")
-    print(f"[LAMMPS] K_r_lmp={meta['K_r_lmp']}, K_theta_lmp={meta['K_t_lmp']}")
+    # x_FF *= 2
+    # x_UU *= 2
 
-    dump_path = os.path.join(folder_path, "bondlengths.dump")
-    t_2xT, r_2xT = read_dump_types_and_lengths(dump_path)
+    # x_0 = ExpectedR(k_r,0,Unfold=False)
 
-    # verify no type-2 occurrences
-    type_counts = {1: int((t_2xT==1).sum()), 2: int((t_2xT==2).sum())}
-    print(f"[types] counts: type1={type_counts[1]}, type2={type_counts[2]}")
-    if type_counts[2] > 0:
-        print("WARNING: Found type-2 bonds in dump → reactions happened at least once.")
+    os.chdir('..')
+    # os.chdir('..')
+    currentdir = os.getcwd()
+    path = os.path.join(currentdir, r'figures')
 
-    # pick one bond series to analyze
-    if BOND_IDX not in (0,1):
-        raise ValueError("BOND_IDX must be 0 or 1")
-    series = r_2xT[BOND_IDX]
-    types_series = t_2xT[BOND_IDX]
-    print(f"[bond] using bond index {BOND_IDX}: N={series.size}, type2_in_series={int((types_series==2).sum())}")
+    blen_arr = np.array(data_df['bond lengths'].iloc[0])
+    btype_arr = np.array(data_df['types'].iloc[0])
 
-    # empirical stats
-    r_mean = float(np.mean(series))
-    r_std  = float(np.std(series))
-    print(f"[empirical] mean={r_mean:.6f}, std={r_std:.6f}")
+    print('--------------------------------------')
+    print(blen_arr[0,:].shape[0])
+    print(blen_arr[0,:])
 
-    # exact-model fit and overlay
-    k_phys_theory = 2.0 * meta["K_r_lmp"]
-    alpha_theory  = k_phys_theory/(2.0*T_LJ)
-    alpha_hat     = fit_alpha_mle(series)
-    k_hat         = 2.0*T_LJ*alpha_hat
-    print(f"[exact] k_phys(theory)={k_phys_theory:.6f}, alpha_theory={alpha_theory:.6f}")
-    print(f"[fit]   alpha_hat={alpha_hat:.6f}, k_hat={k_hat:.6f}, ratio a_hat/a_theory={alpha_hat/alpha_theory:.3f}")
+    x = np.linspace(0,blen_arr[0,:].shape[0], blen_arr[0,:].shape[0])
+    plt.figure(1)
+    sc = plt.scatter(
+        x,
+        blen_arr[0,:],
+        s=2.5,
+        alpha=0.7,
+        c=btype_arr[0,:],
+        cmap='viridis',
+        label=f'bond 1'
+    )
+    #plt.plot(blen_arr[0,:])
+    plt.title('bond 1')
+    plt.xlabel('index')
+    plt.ylabel('length')
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Type')
 
-    # gaussian surrogate params
-    mu_g, sigma_g, k_r_sur = gaussian_params_from_Kr_lmp(meta["K_r_lmp"], R0)
-    print(f"[gaussian] k_r=2*K_lmp={k_r_sur:.6f}, mu={mu_g:.6f}, sigma={sigma_g:.6f}")
+    plt.figure(2)
+    sc = plt.scatter(
+        x,
+        blen_arr[1,:],
+        s=2.5,
+        alpha=0.7,
+        c=btype_arr[1,:],
+        cmap='viridis',
+        label=f'bond 2'
+    )
+    #plt.plot(blen_arr[1,:])
+    plt.title('bond 2')
+    plt.xlabel('index')
+    plt.ylabel('length')
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Type')
 
-    # plot histogram + overlays
-    lo, hi = XRANGE
-    bins = int(round((hi - lo)/BIN_WIDTH))
-    x = np.linspace(lo, hi, 1200)
+    plt.figure(3)
+    mlen_arr = data_df['monomer lengths'].iloc[0]
+    mtype_arr = btype_arr[0,:] + btype_arr[1,:]
 
-    plt.figure(figsize=(7.6, 5.2))
-    plt.xlim(lo, hi)
-    plt.hist(series, bins=bins, range=(lo, hi), density=True, alpha=0.35, color='gray',
-             label=f"data (bond {BOND_IDX})")
-    # exact (solid)
-    plt.plot(x, pdf_single_exact(x, k_phys_theory), lw=2.4, color='black',
-             label=f"exact theory k={k_phys_theory:g}")
-    # gaussian surrogate (dash-dot)
-    plt.plot(x, gaussian_pdf(x, mu_g, sigma_g), lw=2.0, ls='-.',
-             label=f"Gaussian surrogate (mu={mu_g:.3f}, sigma={sigma_g:.3f})")
+    print('______________________')
+    print(mlen_arr.shape)
+    print(blen_arr.shape)
+    sc = plt.scatter(
+        x,
+        mlen_arr,
+        s=2.5,
+        alpha=0.7,
+        c=mtype_arr,
+        cmap='viridis',
+        label=f'bond 1'
+    )
+    plt.title('monomer length')
+    plt.xlabel('index')
+    plt.ylabel('length')
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Type')
 
-    # vertical lines
-    plt.axvline(r_mean,  color='C1', lw=1.2, alpha=0.9, label='empirical mean')
-    plt.axvline(mu_g,    color='C2', lw=1.0, alpha=0.9, label='Gaussian μ')
-
-    plt.xlabel("bond length r")
-    plt.ylabel("density")
-    plt.title(f"{meta['folder']} | bond {BOND_IDX}")
-    plt.legend(loc='upper right')
-    plt.tight_layout()
-    plt.savefig(OUT_FIG, dpi=220)
-    print(f"[saved] {OUT_FIG}")
     plt.show()
-
-if __name__ == "__main__":
-    main()
+main()

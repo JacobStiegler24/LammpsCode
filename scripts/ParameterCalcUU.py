@@ -54,7 +54,6 @@ def ExpectedR(k_r):
         invZ = 10E4
         invZerr = 10E4
     
-
     integral , err = integrate.quad(ExpectedRIntegral_bond, 0, 2, args=(k_r,))
     expectedR_new = invZ*integral*2
     return expectedR_new

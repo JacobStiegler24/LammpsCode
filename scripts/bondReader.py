@@ -15,8 +15,9 @@ print('imported')
 # Free energy + standard error
 
 # Constants
-timestep = 0.0001 # lj
-nevery = 5 # how often data is dumped
+timestep = 0.000001 # lj
+nevery = 100 # how often data is dumped
+run_no = 50000000
 indextime = timestep * nevery # time between each data point in picoseconds
 
 sigma = 22.5E-9 # m
@@ -27,14 +28,18 @@ T_LJ = 1.0 #18.4
 Temp = T_LJ*epsilon/constants.Boltzmann # K
 tau = (sigma)*np.sqrt(mass/epsilon) # s
 
+
+
+print(f'Simulation time: {timestep*run_no*tau}')
+print(f'timestep: {timestep*tau}')
 print(f'sigma: {sigma} nm, epsilon: {epsilon} J, mass: {mass} kg, tau: {tau} s,') 
 print(f'F: {F} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}')
 print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 def readfile():
     # Change directory to the project folder
-    print(os.getcwd())
-    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
-    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceSeed'
+    currentdir = os.getcwd()
+    path = os.path.join(currentdir, r'output/ForceSeed')
+    #path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceSeed'
     os.chdir(path)
     print(os.getcwd())
 
@@ -400,6 +405,7 @@ def main():
     monomer_df.loc[df1.index, ('angle', 'mean')] = mean_t
     monomer_df.loc[df1.index, ('angle', 'std_sem')] = std_sem_t
 
+    os.chdir('..')
     os.chdir('..')
     path = os.path.join(os.getcwd(), r'data files')
     os.chdir(path)

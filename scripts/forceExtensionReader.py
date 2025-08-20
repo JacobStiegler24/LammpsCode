@@ -28,9 +28,9 @@ tau = (sigma)*np.sqrt(mass/epsilon) # s
 
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
+    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output/ForceExtension')
     
-    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceExtension'
+    # path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\ForceExtension'
     os.chdir(path)
     print(os.getcwd())
     

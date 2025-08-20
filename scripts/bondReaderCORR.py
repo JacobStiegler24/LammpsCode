@@ -7,8 +7,6 @@ import re as re
 from scipy import constants
 from scipy import integrate
 from math import floor, log10
-
-# https://blog.timodenk.com/exporting-matplotlib-plots-to-latex/
 print('imported')
 
 # Point of script:
@@ -24,20 +22,24 @@ indextime = timestep * nevery # time between each data point in picoseconds
 sigma = 22.5E-9 # m
 epsilon = 2.25E-20 # J
 mass = 2.12E-22 # kg
-F = (epsilon/sigma) # N
+F_LJ = (epsilon/sigma) # N
 T_LJ = 1.0 #18.4
 Temp = T_LJ*epsilon/constants.Boltzmann # K
 tau = (sigma)*np.sqrt(mass/epsilon) # s
 
+k_theta = 7.785
+k_r = 43.87
+k_r_prime = 3
+
 print(f'sigma: {sigma} nm, epsilon: {epsilon} J, mass: {mass} kg, tau: {tau} s,') 
-print(f'F: {F} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}')
+print(f'F: {F_LJ} pN, F without conversion: {epsilon/(sigma*10**-9)} pN, tau: {tau}')
 print(f'T_LJ: {T_LJ} lj, Temp: {Temp} K, boltzmann constant: {constants.k} J/K')
 def readfile():
     # Change directory to the project folder
-    print(os.getcwd())
-    os.chdir('..')
-    print(os.getcwd())
-    path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\CORR'
+    print(f'current dir: {os.getcwd()}')
+    currentdir = os.getcwd()
+    path = os.path.join(currentdir, r'output/ForceSeedUU')
+    # path = r'\\wsl.localhost\Ubuntu\home\jacob\projects\LammpsCode\output\CORRuu'
     os.chdir(path)
     print(os.getcwd())
 
@@ -52,15 +54,13 @@ def readfile():
         # https://docs.python.org/3/howto/regex.html#regex-howto
         # output/k_r${k_r}_k_theta${k_theta}
         seed_match = re.search(r'Seed(\d+)?', folder)
-        r_match = re.search(r'k_r(\d+(?:\.\d+)?)', folder)
-        t_match = re.search(r'k_theta(\d+(?:\.\d+)?)', folder)
+        r_match = re.search(r'Force(\d+(?:\.\d+)?)', folder)
 
-        if not (r_match and t_match and seed_match):
+        if not (r_match and seed_match):
             continue
         
         seed = int(seed_match.group(1))
-        k_r_lmmps = float(r_match.group(1))
-        k_t_lmmps = float(t_match.group(1))
+        force = float(r_match.group(1))
 
         folder_path = os.path.join(os.getcwd(), folder)
         os.chdir(folder_path)
@@ -107,8 +107,7 @@ def readfile():
         row = {
             "seed": seed,
 
-            "K_r phys": k_r_lmmps*2,
-            "K_theta phys": k_t_lmmps*2,
+            "force": force,
 
             "types": np.array(btype_lst, dtype=int),
 
@@ -124,159 +123,151 @@ def readfile():
         counter += 1
 
     df = pd.DataFrame(rows)
-    df1 = df.groupby(['K_r phys', 'K_theta phys']).agg({
+
+    print(df)
+
+    df1 = df.groupby(['force']).agg({
         'monomer lengths':       lambda s: np.concatenate(s.to_numpy()),
         'angle_deg':     lambda s: np.concatenate(s.to_numpy()),
         'types':         lambda s: np.concatenate(s.to_numpy()),
         'bond lengths':  lambda s: np.concatenate([np.asarray(x, float) for x in s], axis=1),
     }).reset_index()
-    print(f'Read {len(df1)} unique k_r and k_theta pairs')
-    print(f'Unique k_r and k_theta pairs: {df1[["K_r phys", "K_theta phys"]].drop_duplicates().shape[0]}')
-    print(f'Bond lengths shape: {df1["bond lengths"].iloc[0].shape}')
-    print(f'Monomer lengths shape: {df1["monomer lengths"].iloc[0].shape}')
-    print(f'Angle shape: {df1["angle_deg"].iloc[0].shape}')
-
-    
     return df1
 
 def round_sig(x, sig=2):
     # https://stackoverflow.com/a/3413529
     return round(x, sig-int(floor(log10(abs(x))))-1)
 
-def ZTheta(theta, k_t):
-    exponent = (-k_t/(2*T_LJ))*(theta-np.pi)**2
-    integrand =  np.sin(theta)*np.exp(exponent)
+def Zr_bondF(r, k, F=0):
+    alpha = (r*F)/(T_LJ)
+    if F != 0:
+        exponent = (-k_r/(2*T_LJ))*(r-1)**2
+        integrand = r**2*np.exp(exponent)*(2*np.pi*np.sinh(alpha)/alpha)
+    else:
+        exponent = (-k_r/(2*T_LJ))*(r-1)**2
+        integrand = r**2*np.exp(exponent)
+    #integrand = r**2*np.exp(-U_eff(r,k,F))
     return integrand
 
-def Zr_bond(r, k_r):
-    exponent = (-k_r/(2*T_LJ))*(r-1)**2
-    integrand = r**2*np.exp(exponent)
-
-    # Rmean = ( (3/(2*k_r))+1)*1 / ( (1/(2*k_r))+1 )
-    # STD=np.sqrt(1/(2*k_r))
-    # integrand = 1/np.sqrt(2*3.14*STD**2)*np.exp(-(r-Rmean)**2/(2*STD**2))
-
+def Zr_bondU(r, k, F):
+    alpha = (r*F)/(T_LJ)
+    if F != 0:
+        integrand = r**2*(((1-(r**2)/4)**(2*k/T_LJ)))*(2*np.pi*np.sinh(alpha)/alpha)
+    else:
+        integrand = r**2*(((1-(r**2)/4)**(2*k/T_LJ)))
+    #integrand = r**2*np.exp(-U_eff(r,k,F))
     return integrand
 
-def ExpectedThetaIntegral(theta, k_t):
-    return theta*ZTheta(theta,k_t)
+def U_eff(r,k,F):
+    alpha = (r*F)/(2*T_LJ)
+    return -(2*k/T_LJ)*np.log(1-(r**2)/4)-np.log((2*np.pi*np.sinh(alpha)/alpha))
 
-def ExpectedTheta(k_t):
-    Z, Zerr = integrate.quad(ZTheta, 0, np.pi, args=(k_t,))
+def Zr_monomer(r, k):
+    integrand = r**2*((1-(r**2)/16)**(k*8))
+    return integrand
+
+def ExpectedRIntegral_bondU(r, k, F):
+    return Zr_bondU(r,k,F)*r
+
+def ExpectedRIntegral_bondF(r, k, F):
+    return Zr_bondF(r,k,F)*r
+
+def ExpectedRSqrIntegral_bondU(r, k, F):
+    return Zr_bondU(r,k,F)*r**2
+
+def ExpectedRSqrIntegral_bondF(r, k, F):
+    return Zr_bondF(r,k,F)*r**2
+
+def ExpectedR_U(k,F):
+    Z, Zerr = integrate.quad(Zr_bondU, 0, 2, args=(k,F))
     invZ = 1/Z
     invZerr = Zerr/(Z**2)
 
-    integral , err = integrate.quad(ExpectedThetaIntegral, 0, np.pi, args=(k_t,))
-    expectedTheta = invZ*integral
-    expectedTheta_err = expectedTheta*(invZerr/invZ + err/integral)
-    return expectedTheta, expectedTheta_err
-
-def ExpectedRIntegral_bond(r, k_r):
-    return Zr_bond(r,k_r)*r
-
-def ExpectedRSqrIntegral_bond(r, k_r):
-    return Zr_bond(r,k_r)*r**2
-
-def ExpectedR(k_r):
-    Z, Zerr = integrate.quad(Zr_bond, 0, np.inf, args=(k_r,))
-    invZ = 1/Z
-    invZerr = Zerr/(Z**2)
-
-    integral , err = integrate.quad(ExpectedRIntegral_bond, 0, np.inf, args=(k_r,))
+    integral , err = integrate.quad(ExpectedRIntegral_bondU, 0, 2, args=(k,F))
     expectedR_new = invZ*integral*2
     return expectedR_new
 
-def ExpectedRSqr(k_r):
-    Z, Zerr = integrate.quad(Zr_bond, 0, np.inf, args=(k_r,))
+def ExpectedR_F(k,F):
+    Z, Zerr = integrate.quad(Zr_bondF, 0, np.inf, args=(k,F))
     invZ = 1/Z
     invZerr = Zerr/(Z**2)
 
-    integral1, err = integrate.quad(ExpectedRSqrIntegral_bond, 0, np.inf, args=(k_r,))
-    integral2, err = integrate.quad(ExpectedRIntegral_bond, 0, np.inf, args=(k_r,))
-    expectedR_sqr_new = invZ*integral1*2 + 2*(invZ*integral2)**2
+    integral , err = integrate.quad(ExpectedRIntegral_bondF, 0, np.inf, args=(k,F))
+    expectedR_new = invZ*integral*2
+    return expectedR_new
 
+def ExpectedRSqr_U(k,F):
+    Z, Zerr = integrate.quad(Zr_bondU, 0, 2, args=(k,F))
+    invZ = 1/Z
+    invZerr = Zerr/(Z**2)
+
+    integral1, err = integrate.quad(ExpectedRSqrIntegral_bondU, 0, 2, args=(k,F))
+    integral2, err = integrate.quad(ExpectedRIntegral_bondU, 0, 2, args=(k,F))
+    expectedR_sqr_new = invZ*integral1*2 + 2*(invZ*integral2)**2
     return expectedR_sqr_new
 
-def VarR(k_r):
+def ExpectedRSqr_F(k,F):
+    Z, Zerr = integrate.quad(Zr_bondF, 0, np.inf, args=(k,F))
+    invZ = 1/Z
+    invZerr = Zerr/(Z**2)
+
+    integral1, err = integrate.quad(ExpectedRSqrIntegral_bondF, 0, 2, args=(k,F))
+    integral2, err = integrate.quad(ExpectedRIntegral_bondF, 0, 2, args=(k,F))
+    expectedR_sqr_new = invZ*integral1*2 + 2*(invZ*integral2)**2
+    return expectedR_sqr_new
+
+def VarR_U(k,F):
     
-    expectedR = ExpectedR(k_r)
-    expectedRSqr = ExpectedRSqr(k_r)
+    expectedR = ExpectedR_U(k,F)
+    expectedRSqr = ExpectedRSqr_U(k,F)
+
+    var = expectedRSqr-expectedR**2
+    return var
+
+def VarR_F(k,F):
+    
+    expectedR = ExpectedR_F(k,F)
+    expectedRSqr = ExpectedRSqr_F(k,F)
 
     var = expectedRSqr-expectedR**2
     return var
 
 def stats(data_df):
-    rt_pairs = data_df[['K_r phys', 'K_theta phys']].drop_duplicates().values
+    rt_pairs = data_df['force'].drop_duplicates().values
     
 
     std_mlen = []
     sem_std_mlen = []
     mean_mlen = []
     sem_mlen = []
-    mean_t = []
-    sem_t = []
-    std_t = []
-    sem_std_t = []
+
     mean_blen = []
 
-    for k_r, k_t in rt_pairs:
+    for force in rt_pairs:
         try:
-            std_mlen.append(np.std(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0]))
-            sem_std_mlen.append((np.std(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0])))
+            std_mlen.append(np.std(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))
+            sem_std_mlen.append((np.std(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[data_df['force'] == force]['monomer lengths'].iloc[0])))
             
-            mean_mlen.append(np.mean(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0]))
-            sem_mlen.append((np.mean(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['monomer lengths'].iloc[0])))
-
-            std_t.append(np.std(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])*np.pi/180)
-            sem_std_t.append((np.std(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])*np.pi/180)/np.sqrt(len(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])))
-
-            mean_t.append(np.mean(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])*np.pi/180)
-            sem_t.append((np.mean(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])*np.pi/180)/np.sqrt(len(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['angle_deg'].iloc[0])))
-
-            mean_blen.append(np.max(np.array(data_df[(data_df['K_r phys'] == k_r) & (data_df['K_theta phys'] == k_t)]['bond lengths'].iloc[0]), axis=1))
+            mean_mlen.append(np.mean(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))
+            sem_mlen.append((np.mean(data_df[data_df['force'] == force]['monomer lengths'].iloc[0]))/np.sqrt(len(data_df[data_df['force'] == force]['monomer lengths'].iloc[0])))
+            mean_blen.append(np.max(np.array(data_df[data_df['force'] == force]['bond lengths'].iloc[0]), axis=1))
 
         except ValueError as e:
-            print(f"Error calculating std for k_r={k_r}, k_t={k_t}: {e}")
+            print(f"Error calculating std for f={force}: {e}")
             std_mlen.append(np.nan)
             sem_std_mlen.append(np.nan)
 
             mean_mlen.append(np.nan)
             mean_mlen.append(np.nan)
 
-            mean_t.append(np.nan)
-            sem_t.append(np.nan)
-
-    #mean_r_arr = np.array(mean_r, dtype=np.float64)
-    mean_t_arr = np.array(mean_t, dtype=np.float64)
-
-    #delta_r = np.abs(mean_r_arr-0.1)
-    delta_t = np.abs(np.pi-mean_t_arr-0.1)
-    #delta = delta_r**2 + delta_t**2
-
-    print(f'index closest to 10%: {delta_t.argmin()}')
-    #print(f'sigma_r: {sigma_r_arr[delta.argmin()]}, sigma_t: {sigma_t_arr[delta.argmin()]}')
-    print(f'mean_t: {mean_t_arr[delta_t.argmin()]}')
-    print(f'k_r: {rt_pairs[delta_t.argmin()][0]}, k_t: {rt_pairs[delta_t.argmin()][1]}')
-
-    #k_r = data_df['K_r'].iloc[np.where(delta_t < 0.001)]
-    #k_t = data_df['K_theta phys'].iloc[np.where(delta_t < 0.001)]
-
-    #corr = np.corrcoef((sigma_r), np.log(sigma_t))
-    #print("Correlation coefficient:", corr)
 
     monomer_df = pd.DataFrame({
-        "K_r": data_df['K_r phys'],
-        "K_theta": data_df['K_theta phys'],
+        "force": data_df['force'],
 
         "monomer length mean": mean_mlen,
         "monomer length sem": sem_mlen,
         "monomer length std": std_mlen,
         "monomer length std sem": sem_std_mlen,
-
-        "theta mean": mean_t_arr,
-        "theta sem": sem_t,
-        "theta std": std_t,
-        "theta std sem": sem_std_t,
 
         "blen mean": mean_blen,
 
@@ -287,159 +278,23 @@ def stats(data_df):
     return monomer_df 
 
 def main():
-    data_df = readfile()
-    data_df.sort_values(by=['K_r phys', 'K_theta phys'], inplace=True)
-    
-    monomer_df = stats(data_df)
-
-    os.chdir('..')
-    os.chdir('..')
-    path = os.path.join(os.getcwd(), r'figures')
-    os.chdir(path)
-    print(os.getcwd())
-
-    
-    x = np.linspace(0.005, 45, 300)
-    p = np.sqrt(np.array([VarR(i) for i in x]))
-    l = (np.array([ExpectedR(i) for i in x]))
-    y = p/l
-
-    # plt.figure(1)
-    # plt.ylim(0,4)
-    # plt.plot(x, l, label='theory <R>')
-    # plt.errorbar(
-    #     monomer_df['K_r'],
-    #     ((monomer_df['monomer length mean'])),
-    #     yerr=(monomer_df['monomer length sem']),
-    #     color='black',
-    #     fmt='.',   
-    #     markersize=1,
-    #     capsize=2,
-    #     capthick=0.5,
-    #     elinewidth=0.3
-    # )
-    # plt.scatter(
-    #     monomer_df['K_r'],
-    #     (monomer_df['monomer length mean']),
-    #     c=monomer_df['K_theta'],
-    #     s=10
-    # )
-    # plt.colorbar(label='K_theta')
-    # plt.xlabel('K_r')
-    # plt.ylabel('<R> (lj)')
-    # plt.title('Expected monomer length coloured by K_theta')
-    # plt.legend()
-
-    plt.figure(2)
-    plt.rcParams.update({
-        "figure.figsize": (5, 4),         # width, height in inches
-        "axes.titlesize": 14,             # title font size
-        "axes.labelsize": 12,             # x/y label font size
-        "xtick.labelsize": 10,            # x-tick label font size
-        "ytick.labelsize": 10,            # y-tick label font size
-        "legend.fontsize": 10,            # legend font size
-        "savefig.dpi": 300,                # resolution
-        "figure.dpi": 300
-    })
-    fig, ax = plt.subplots(figsize=(5, 4))
-    plt.plot(x, y, label='theory std/length')
-
-    plt.scatter(
-        monomer_df['K_r'],
-        monomer_df['monomer length std']/monomer_df['monomer length mean'],
-        c=monomer_df['K_theta'],
-        marker='x',
-        s=60
-    )
-    plt.errorbar(
-        monomer_df['K_r'],
-        monomer_df['monomer length std']/monomer_df['monomer length mean'],
-        yerr=monomer_df['monomer length std']/monomer_df['monomer length mean']*np.sqrt(monomer_df['monomer length std sem']**2/monomer_df['monomer length std']**2 + monomer_df['monomer length sem']**2/monomer_df['monomer length mean']**2),
-        color='black',
-        fmt='.',   
-        markersize=1,
-        capsize=2,
-        capthick=0.5,
-        elinewidth=0.3
-    )
-
-    # plt.colorbar(label='K_theta')
-    plt.xlabel('K_r')
-    plt.ylabel('Monomer length std (lj)')
-    plt.title('std of monomer length against K_r with varying K_theta')
-    plt.legend()
-    plt.savefig('std_length_vs_K_r.eps', bbox_inches='tight')
-   
-    plt.figure(3)
-    plt.rcParams.update({
-        "figure.figsize": (5, 4),         # width, height in inches
-        "axes.titlesize": 14,             # title font size
-        "axes.labelsize": 12,             # x/y label font size
-        "xtick.labelsize": 10,            # x-tick label font size
-        "ytick.labelsize": 10,            # y-tick label font size
-        "legend.fontsize": 10,            # legend font size
-        "savefig.dpi": 300,                # resolution
-        "figure.dpi": 300
-    })
-    fig, ax = plt.subplots(figsize=(5, 4))
-    x = np.linspace(0.1, 80, 400)
-    y = np.array([ExpectedTheta(i) for i in x])
-    plt.plot(x, (y[:,0]), color='red')
-    plt.scatter(
-        monomer_df['K_theta'],
-        (monomer_df['theta mean']),
-        c=monomer_df['K_r'],
-        marker='x',
-        s=80
-    )
-    plt.errorbar(
-        monomer_df['K_theta'],
-        monomer_df['theta mean'],
-        yerr=monomer_df['theta sem'],
-        color='black',
-        fmt='.',      # adds point markers
-        markersize=1,
-        capsize=2,
-        capthick=0.5,
-        elinewidth=0.3
-    )
-    
-    # plt.colorbar(label='K_r')
-    plt.xlabel('K_theta')
-    plt.ylabel('Mean theta (rad)')
-    plt.title('Mean theta against K_theta with varying K_r')
-    plt.savefig('mean_theta_vs_K_theta.eps', bbox_inches='tight')
-
-    plt.figure(6)
-    plt.title('Single bond length histogram at k_theta = 20.0 lj. Timestep=0.001, Count=800000, 5 seeds')
-    x = np.linspace(0,4,200)
-    r = np.array([Zr_bond(i, 42) for i in x])
-    Z, err = integrate.quad(Zr_bond, 0, np.inf, args=42)
-    plt.hist(data_df[(data_df['K_r phys'] == 42.0) & (data_df['K_theta phys'] == 20.0)]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label='k_r = 42 lj')
-    plt.plot(x, r/Z, label='k_r = 42 lj theory')
-    r = np.array([Zr_bond(i, 2) for i in x])
-    Z, err = integrate.quad(Zr_bond, 0, np.inf, args=2)
-    plt.hist(data_df[(data_df['K_r phys'] == 2.0) & (data_df['K_theta phys'] == 20.0)]['bond lengths'].iloc[0][0,:], bins=200, density=True, alpha=0.5, label='k_r = 2 lj')
-    plt.plot(x, r/Z, label='k_r = 2 lj theory')
-    plt.xlabel('Bond length (lj)')
-    plt.ylabel('Frequency')
-    plt.savefig('bond_length_histogram.eps', bbox_inches='tight')
-
-    plt.figure(7)
-    plt.title('Monomer angle histogram at k_r = 42 lj. Timestep=0.001, Count=800000, 5 seeds')
-    x = np.linspace(0,np.pi,200)
-    r = np.array([ZTheta(i, 20) for i in x])
-    Z, err = integrate.quad(ZTheta, 0, np.pi, args=20)
-    plt.hist(monomer_df[(monomer_df['K_r'] == 42.0) & (monomer_df['K_theta'] == 20.0)]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label='k_theta = 20 lj')
-    plt.plot(x, r/Z, label='k_theta = 20 lj theory')
-    r = np.array([ZTheta(i, 2) for i in x])
-    Z, err = integrate.quad(ZTheta, 0, np.pi, args=2)
-    plt.hist(monomer_df[(monomer_df['K_r'] == 42.0) & (monomer_df['K_theta'] == 2.0)]['angles'].iloc[0]*np.pi/180, bins=200, density=True, alpha=0.5, label='k_theta = 2.0 lj')
-    plt.plot(x, r/Z, label='k_theta = 2.0 lj theory')
-    plt.xlabel('Monomer angle (rad)')
-    plt.ylabel('Frequency')
-    plt.savefig('monomer_angle_histogram.eps', bbox_inches='tight')
-
+    counter = 0
+    for F in range(0,60,10):
+        q = np.linspace(0.01,2,1000)
+        # R_var = np.array(VarR_U(k_r_prime, F))
+        # R_mean = np.array(ExpectedR_U(k_r_prime, F))
+        norm_U, err = integrate.quad(Zr_bondU, 0, 2, args=(k_r_prime,F))
+        norm_F, err = integrate.quad(Zr_bondF, 0, 2, args=(k_r_prime,F))
+        Z_U = np.array(Zr_bondU(q,k_r_prime,F)/norm_U)
+        Z_F = np.array(Zr_bondF(q,k_r_prime,F)/norm_F)
+        plt.figure(counter)
+        plt.title(f'force {F}')
+        plt.plot(q,Z_U, label='Unfolded')
+        plt.plot(q,Z_F, label='folded')
+        plt.xlabel('bond length (lj)')
+        plt.ylabel('frequency')
+        plt.legend()
+        counter+=1
     plt.show()
 
 main()

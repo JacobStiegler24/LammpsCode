@@ -10,15 +10,15 @@ variable R0 equal 1
 variable R0_prime equal 2
 # variable K_theta equal 7.785
 # variable stretch_force equal 10.0
-variable unfold_critical_distance equal 1.25
-variable fold_critical_distance equal 1
+variable unfold_critical_distance equal 1.5
+variable fold_critical_distance equal 0.3
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 10000000
-variable time_step equal 0.000001   # time step in picoseconds
+variable run_no equal 1000000
+variable time_step equal 0.0001   # time step in picoseconds
 # variable seed equal 54654652     # random number seed
-variable dumpfreq equal 100
+variable dumpfreq equal 10
 #########################################################################################
 
 units lj                # Lennard-Jones units
@@ -45,7 +45,7 @@ pair_coeff * * 0.0 0.0
 
 bond_style hybrid harmonic fene         # harmonic bond
 bond_coeff 1 harmonic ${K_r} ${R0}     # args: bond type, bond style, K, R0
-bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 1.0     # args: bond type, bond style, K, R0, epsilon, sigma
+bond_coeff 2 fene ${K_r_prime} ${R0_prime} 0.0 0.0     # args: bond type, bond style, K, R0, epsilon, sigma
 
 # bond_style harmonic       # harmonic bond
 # bond_coeff 1 ${K_r} ${R0}
@@ -56,7 +56,7 @@ angle_coeff 1 ${K_theta} 180.0   # args: angle type, K, theta0
 
 #exclude atom 1
 fix 1 motion_group nve                           # NVE integrator    
-fix 2 motion_group langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
+fix 2 all langevin ${temp} ${temp} 1.0 ${seed}  # Langevin thermostat
 
 # variable fz equal ramp(0,${stretch_force})
 # fix extension_force extension_group addforce 0.0 0.0 v_fz
@@ -75,10 +75,14 @@ compute bondlen all bond/local dist
 compute btype all property/local btype
 dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
 
+# compute sumz all reduce sum z
+# variable z equal c_sumz
+# fix mySumZ all print ${dumpfreq} "${z}" file ${outdir}/sumZ.out screen no
+
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
 
-dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz #look into generating folder
+dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz
 write_data ${outdir}/datafile.data
 
 # group D1 id 1
@@ -109,15 +113,15 @@ molecule unfolded m_unfolded.txt
 molecule D1E2D m_D1E2D.txt
 molecule D2E1D m_D2E1D.txt
 
-fix rxn1 all bond/react & 
-  react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
-  react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
-  react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} &
-  react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #&
-  react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} &
-  react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} &
-  react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} &
-  react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+# fix rxn1 all bond/react & 
+#   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} &
+#   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} &
+#   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} &
+#   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} &
+#   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} &
+#   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} &
+#   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} &
+#   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
 
 
 # molecule fold m_fold.txt

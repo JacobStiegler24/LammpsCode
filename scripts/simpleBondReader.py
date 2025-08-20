@@ -29,7 +29,7 @@ chosenForce = '0.0'
 
 def readfile():
     # Change directory to the project folder
-    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output')
+    path = os.path.join(os.getcwd(), r'projects/Fibrin-Monomer/output/ForceExtensionUU')
     os.chdir(path)
     print(os.getcwd())
     
