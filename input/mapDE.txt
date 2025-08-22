@@ -1,0 +1,14 @@
+# map file
+
+3 equivalences
+
+InitiatorIDs
+
+1
+2
+
+Equivalences
+
+1 1 
+2 2
+3 3

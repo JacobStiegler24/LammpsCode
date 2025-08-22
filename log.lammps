@@ -1,27 +1,32 @@
 LAMMPS (29 Aug 2024 - Update 3)
 OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:99)
   using 1 OpenMP thread(s) per MPI task
+
+
 ############################################################################################
 # Variables
 # sigma = 22.25 nm
 # epsilon = 2.25E-20 J
 # 1 lj force unit = 1 pN
 # 1 lj spring constant = 0.5 micro N/m
+
+# .sh file variables:
 # variable K_r equal 3.124
 # variable K_r_prime equal 10
-variable R0 equal 1
-variable R0_prime equal 2
 # variable K_theta equal 7.785
 # variable stretch_force equal 10.0
+# variable seed equal 54654652     # random number seed
+
+variable R0 equal 1
+variable R0_prime equal 2
 variable unfold_critical_distance equal 1.5
 variable fold_critical_distance equal 0.3
 variable reaction_upperbound equal 50
 variable temp equal 1.0
 
-variable run_no equal 1000000
-variable time_step equal 0.0001   # time step in picoseconds
-# variable seed equal 54654652     # random number seed
-variable dumpfreq equal 10
+variable run_no equal 100000
+variable time_step equal 0.0001
+variable dumpfreq equal 1
 #########################################################################################
 
 units lj                # Lennard-Jones units
@@ -32,7 +37,7 @@ boundary p p p          # all boundaries are periodic
 neighbor 1.9 bin
 neigh_modify every 1 delay 1 check yes
 
-read_data initial_configuration.txt
+read_data input/initial_configuration.txt
 Reading data file ...
   orthogonal box = (0 0 0) to (100 100 1000)
   1 by 1 by 1 MPI processor grid
@@ -56,7 +61,7 @@ Finding 1-2 1-3 1-4 neighbors ...
      1 = max # of 1-4 neighbors
      2 = max # of special neighbors
   special bonds CPU = 0.000 seconds
-  read_data CPU = 0.001 seconds
+  read_data CPU = 0.002 seconds
 
 labelmap atom 1 D 2 E
 labelmap bond 1 fold 2 unfold
@@ -100,7 +105,7 @@ fix 2 all langevin 1 1 1.0 54654685
 # variable fz equal ramp(0,${stretch_force})
 # fix extension_force extension_group addforce 0.0 0.0 v_fz
 fix extension_force extension_group addforce 0.0 0.0 ${stretch_force}
-fix extension_force extension_group addforce 0.0 0.0 50.0
+fix extension_force extension_group addforce 0.0 0.0 80.0
 
 ############################################################################################
 # chatgpt, explain the terms
@@ -115,8 +120,8 @@ timestep 0.0001
 compute bondlen all bond/local dist
 compute btype all property/local btype
 dump bondlen_dump extension_group local ${dumpfreq} ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump extension_group local 10 ${outdir}/bondlengths.dump c_btype c_bondlen
-dump bondlen_dump extension_group local 10 output/ForceSeedFF/Force50.0_Seed54654685/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local 1 ${outdir}/bondlengths.dump c_btype c_bondlen
+dump bondlen_dump extension_group local 1 output/ForceSeedUF/Force80.0_Seed54654685/bondlengths.dump c_btype c_bondlen
 
 # compute sumz all reduce sum z
 # variable z equal c_sumz
@@ -124,14 +129,13 @@ dump bondlen_dump extension_group local 10 output/ForceSeedFF/Force50.0_Seed5465
 
 compute myAngle all angle/local theta
 dump angle_dump all local ${dumpfreq} ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 10 ${outdir}/angles.dump c_myAngle
-dump angle_dump all local 10 output/ForceSeedFF/Force50.0_Seed54654685/angles.dump c_myAngle
+dump angle_dump all local 1 ${outdir}/angles.dump c_myAngle
+dump angle_dump all local 1 output/ForceSeedUF/Force80.0_Seed54654685/angles.dump c_myAngle
 
 dump dum1 all custom ${dumpfreq} ${outdir}/dum1.dump id type x y z ix iy iz
-dump dum1 all custom 10 ${outdir}/dum1.dump id type x y z ix iy iz
-dump dum1 all custom 10 output/ForceSeedFF/Force50.0_Seed54654685/dum1.dump id type x y z ix iy iz
-write_data ${outdir}/datafile.data
-write_data output/ForceSeedFF/Force50.0_Seed54654685/datafile.data
+dump dum1 all custom 1 ${outdir}/dum1.dump id type x y z ix iy iz
+dump dum1 all custom 1 output/ForceSeedUF/Force80.0_Seed54654685/dum1.dump id type x y z ix iy iz
+write_data output/datafile.data
 System init for write_data ...
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
@@ -172,7 +176,7 @@ WARNING: Not all mixed pair coeffs generated from mixing. Use write_data with 'p
 ############################################################################################
 # Molecule unfolding/folding
 
-molecule folded m_folded.txt
+molecule folded input/m_folded.txt
 Read molecule template folded:
 folded
   1 molecules
@@ -182,7 +186,7 @@ folded
   1 angles with max type 1
   0 dihedrals with max type 0
   0 impropers with max type 0
-molecule unfolded m_unfolded.txt
+molecule unfolded input/m_unfolded.txt
 Read molecule template unfolded:
 unfolded
   1 molecules
@@ -192,7 +196,7 @@ unfolded
   1 angles with max type 1
   0 dihedrals with max type 0
   0 impropers with max type 0
-molecule D1E2D m_D1E2D.txt
+molecule D1E2D input/m_D1E2D.txt
 Read molecule template D1E2D:
 unfoldedED
   1 molecules
@@ -202,7 +206,7 @@ unfoldedED
   1 angles with max type 1
   0 dihedrals with max type 0
   0 impropers with max type 0
-molecule D2E1D m_D2E1D.txt
+molecule D2E1D input/m_D2E1D.txt
 Read molecule template D2E1D:
 unfoldedDE
   1 molecules
@@ -213,7 +217,28 @@ unfoldedDE
   0 dihedrals with max type 0
   0 impropers with max type 0
 
-# fix rxn1 all bond/react #   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D mapDE.txt prob 0.5 ${seed} #   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D mapED.txt prob 0.5 ${seed} #   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded mapDE.txt prob 0.5 ${seed} #   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded mapED.txt prob 0.5 ${seed} #   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D mapDE.txt prob 0.5 ${seed} #   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D mapED.txt prob 0.5 ${seed} #   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded mapDE.txt prob 0.5 ${seed} #   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D2E1D input/mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 ${reaction_upperbound} folded D2E1D input/mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 ${seed}   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 ${unfold_critical_distance} ${reaction_upperbound} folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 ${reaction_upperbound} folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 ${seed}   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 ${reaction_upperbound} D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 ${seed}   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 ${unfold_critical_distance} ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 ${reaction_upperbound} D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 ${seed}   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 ${fold_critical_distance} unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 ${seed}   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 ${fold_critical_distance} unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 ${seed}   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 54654685   react DEFoldFull all 1 0 ${fold_critical_distance} D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 54654685   react DEFoldFull all 1 0 0.3 D2E1D folded input/mapDE.txt prob 0.5 ${seed}   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 54654685   react DEFoldFull all 1 0 0.3 D2E1D folded input/mapDE.txt prob 0.5 54654685   react EDFoldFull all 1 0 ${fold_critical_distance} D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 54654685   react DEFoldFull all 1 0 0.3 D2E1D folded input/mapDE.txt prob 0.5 54654685   react EDFoldFull all 1 0 0.3 D1E2D folded input/mapED.txt prob 0.5 ${seed}
+fix rxn1 all bond/react   react DEUnfold all 1 1.5 50 folded D2E1D input/mapDE.txt prob 0.5 54654685   react EDUnfold all 1 1.5 50 folded D1E2D input/mapED.txt prob 0.5 54654685   react DEUnfoldFull all 1 1.5 50 D1E2D unfolded input/mapDE.txt prob 0.5 54654685   react EDUnfoldFull all 1 1.5 50 D2E1D unfolded input/mapED.txt prob 0.5 54654685   react DEFold all 1 0 0.3 unfolded D1E2D input/mapDE.txt prob 0.5 54654685   react EDFold all 1 0 0.3 unfolded D2E1D input/mapED.txt prob 0.5 54654685   react DEFoldFull all 1 0 0.3 D2E1D folded input/mapDE.txt prob 0.5 54654685   react EDFoldFull all 1 0 0.3 D1E2D folded input/mapED.txt prob 0.5 54654685
+dynamic group bond_react_MASTER_group defined
 
 
 # molecule fold m_fold.txt
@@ -224,7 +249,7 @@ unfoldedDE
 ############################################################################################
 
 run ${run_no}
-run 1000000
+run 100000
 
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
@@ -242,54 +267,129 @@ Your simulation uses code contributions which should be cited:
  pages =   {3282–-3297}
 }
 
+- fix bond/react: reacter.org doi:10.1016/j.polymer.2017.09.038, doi:10.1021/acs.macromol.0c02012, doi:10.1016/j.cpc.2024.109287
+
+@Article{Gissinger17,
+ author = {J. R. Gissinger and B. D. Jensen and K. E. Wise},
+ title = {Modeling Chemical Reactions in Classical Molecular Dynamics Simulations},
+ journal = {Polymer},
+ year =    2017,
+ volume =  128,
+ pages =   {211--217}
+}
+
+@Article{Gissinger20,
+ author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},
+ title = {{REACTER}: A Heuristic Method for Reactive Molecular Dynamics},
+ journal = {Macromolecules},
+ year =    2020,
+ volume =  53,
+ number =  22,
+ pages =   {9953--9961}
+}
+
+@Article{Gissinger24,
+ author = {J. R. Gissinger, B. D. Jensen, K. E. Wise},
+ title = {Molecular Modeling of Reactive Systems with REACTER},
+ journal = {Computer Physics Communications},
+ year =    2024,
+ volume =  304,
+ number =  109287
+}
+
 CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE-CITE
 
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
-Per MPI rank memory allocation (min/avg/max) = 5.573 | 5.573 | 5.573 Mbytes
+Neighbor list info ...
+  update: every = 1 steps, delay = 1 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11.9
+  ghost atom cutoff = 11.9
+  binsize = 5.95, bins = 17 17 169
+  2 neighbor lists, perpetual/occasional/extra = 1 1 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d
+      bin: standard
+  (2) fix bond/react, occasional, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 5.897 | 5.897 | 5.897 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
-         0   0              0              0              0              0            
-   1000000   1.4128733      0              20.637959      22.050832     -7.3116821e-06
-Loop time of 1.78242 on 1 procs for 1000000 steps with 3 atoms
-
-Performance: 4847335.663 tau/day, 561034.220 timesteps/s, 1.683 Matom-step/s
-84.8% CPU use with 1 MPI tasks x 1 OpenMP threads
-
-MPI task timing breakdown:
-Section |  min time  |  avg time  |  max time  |%varavg| %total
----------------------------------------------------------------
-Pair    | 0.049229   | 0.049229   | 0.049229   |   0.0 |  2.76
-Bond    | 0.14214    | 0.14214    | 0.14214    |   0.0 |  7.97
-Neigh   | 0.0019174  | 0.0019174  | 0.0019174  |   0.0 |  0.11
-Comm    | 0.15515    | 0.15515    | 0.15515    |   0.0 |  8.70
-Output  | 1.0721     | 1.0721     | 1.0721     |   0.0 | 60.15
-Modify  | 0.23619    | 0.23619    | 0.23619    |   0.0 | 13.25
-Other   |            | 0.1257     |            |       |  7.05
-
-Nlocal:              3 ave           3 max           3 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-Nghost:             21 ave          21 max          21 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-Neighs:              0 ave           0 max           0 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-
-Total # of neighbors = 0
-Ave neighs/atom = 0
-Ave special neighs/atom = 2
-Neighbor list builds = 46
-Dangerous builds = 0
-
-# unfix extension_force
-
-# run ${run_no}  # run again to allow the system to relax after the reactions
-
-write_restart final.restart
-System init for write_restart ...
-Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
-WARNING: Use special bonds = 0,1,1 with bond style fene (src/MOLECULE/bond_fene.cpp:185)
-
-# statistics
-# file structure
-# angular potential
-# folding/unfolding efficiency
-Total wall time: 0:00:01
+         0   0              0              0.57536414     0.57536414    -1.3333333e-07
+WARNING: FENE bond too long: 1633 3 2 1.897404838912612 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1634 3 2 1.898321971049387 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1635 3 2 1.8992375282569531 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1636 3 2 1.9001519174106087 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1637 3 2 1.9010659274348014 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1638 3 2 1.9019786850003777 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1639 3 2 1.9028910899236253 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1640 3 2 1.9038048301554535 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1641 3 2 1.9047198392061668 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1642 3 2 1.9056348850257714 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1643 3 2 1.906544796261151 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1644 3 2 1.9074509270565703 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1645 3 2 1.908357707002672 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1646 3 2 1.9092645530041092 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1647 3 2 1.9101734370791406 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1648 3 2 1.911083469272062 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1649 3 2 1.9119931984035794 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1650 3 2 1.912901104882085 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1651 3 2 1.9138104621883942 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1652 3 2 1.9147192591173752 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1653 3 2 1.9156246525811307 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1654 3 2 1.9165298680984135 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1655 3 2 1.9174377830420868 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1656 3 2 1.9183477971567642 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1657 3 2 1.9192553867216353 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1658 3 2 1.920158684273754 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1659 3 2 1.9210663611524659 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1660 3 2 1.921970760505134 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1661 3 2 1.922876523936099 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1662 3 2 1.9237857512373533 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1663 3 2 1.9246985023802796 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1664 3 2 1.9256129521895367 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1665 3 2 1.9265313225538983 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1666 3 2 1.9274481917559068 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1667 3 2 1.9283614589586335 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1668 3 2 1.9292724754393913 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1669 3 2 1.9301810088388407 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1670 3 2 1.9310883295829555 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1671 3 2 1.9319961940547479 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1672 3 2 1.9329040562448183 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1673 3 2 1.9338103073739492 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1674 3 2 1.934713941854565 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1675 3 2 1.9356128423106425 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1676 3 2 1.9365085225149439 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1677 3 2 1.9374065623716379 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1678 3 2 1.9383026015864766 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1679 3 2 1.9392011486622123 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1680 3 2 1.9400990878345403 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1681 3 2 1.9409917690004277 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1682 3 2 1.9418845370115463 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1683 3 2 1.9427777032123401 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1684 3 2 1.9436748609838013 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1685 3 2 1.94457448376509 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1686 3 2 1.9454734735505999 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1687 3 2 1.946376375652945 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1688 3 2 1.9472768328583108 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1689 3 2 1.9481741057692026 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1690 3 2 1.9490709605353638 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1691 3 2 1.9499651426440914 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1692 3 2 1.9508581081008172 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1693 3 2 1.9517501323090833 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1694 3 2 1.9526401717565096 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1695 3 2 1.9535287097896032 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1696 3 2 1.9544124115419896 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1697 3 2 1.9552937640707262 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1698 3 2 1.9561732994873122 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1699 3 2 1.9570515406711662 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1700 3 2 1.9579289666788209 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1701 3 2 1.9588064995716161 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1702 3 2 1.9596812618384571 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1703 3 2 1.9605540667270809 (src/MOLECULE/bond_fene.cpp:89)
+WARNING: FENE bond too long: 1704 3 2 1.961427

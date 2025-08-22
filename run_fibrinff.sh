@@ -16,7 +16,7 @@ k_r_prime=5.0
 
  
 #=======================================
-rm -rf output/CORRff
+rm -rf output/K_rt_SeedFF
 #=======================================
 
 
@@ -24,7 +24,7 @@ rm -rf output/CORRff
 for seedval in $seed ; do
   for k_r in $k_r_arr ; do
     for k_theta in $k_theta_arr ; do
-      outdir="output/CORRff/k_r${k_r}_k_theta${k_theta}Seed${seedval}"
+      outdir="output/K_rt_SeedFF/k_r${k_r}_k_theta${k_theta}Seed${seedval}"
       mkdir -p "$outdir"
       ./lmp_mpi \
         -var stretch_force "$stretch_force" \
