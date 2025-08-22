@@ -1,3 +1,4 @@
 output/**
 
 !output/.gitkeepoutput/**
+figures/*.eps
